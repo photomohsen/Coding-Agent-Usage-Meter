@@ -1,0 +1,22 @@
+<!-- PROTOTYPE: throwaway. Answers "what should the widget look like on my real desktop?" -->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <!-- For the tray icons only. -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Company app control blocks unsigned .exe files in the user folder; run through the signed dotnet.exe instead. -->
+    <UseAppHost>false</UseAppHost>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Keep WinForms and System.Drawing names from clashing with WPF ones (Application, Brush, Point...). -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+
+</Project>
