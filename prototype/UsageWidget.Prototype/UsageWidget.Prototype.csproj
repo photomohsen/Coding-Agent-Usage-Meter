@@ -14,6 +14,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The Claude spark and the Codex mark, from the installed apps' own icons. -->
+    <Resource Include="Icons\*.png" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Keep WinForms and System.Drawing names from clashing with WPF ones (Application, Brush, Point...). -->
     <Using Remove="System.Windows.Forms" />
     <Using Remove="System.Drawing" />

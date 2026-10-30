@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
@@ -14,7 +15,7 @@ class PrototypeWindow : Window
 {
     static readonly Brush Normal = Hex("#4FC3F7"), Amber = Hex("#FFB300"), Red = Hex("#EF5350"),
         Stale = Hex("#757575"), Track = Hex("#33FFFFFF"), Text = Hex("#F5F5F5"), Dim = Hex("#B0B0B0"),
-        CardBg = Hex("#1E1E1E"), Edge = Hex("#40FFFFFF"), LimitName = Hex("#9FA8DA"), CodexName = Hex("#80CBC4");
+        CardBg = Hex("#1E1E1E"), Edge = Hex("#40FFFFFF"), LimitName = Hex("#9FA8DA");
 
     readonly (string Key, string Name, Func<UIElement> Build)[] variants;
     readonly Settings settings = Settings.Load();
@@ -231,11 +232,24 @@ class PrototypeWindow : Window
         stack.Children.Add(v.Build());
         if (v.Key != "B") // Pill shows the Update time itself
         {
-            stack.Children.Add(Label($"{(ShowCodex ? "Claude " : "")}Updated {Time(lastOk)}{(error != null ? $" · ⚠ {error}" : "")}",
-                9, error != null ? Amber : Dim, HorizontalAlignment.Center, top: 4));
-            if (ShowCodex)
-                stack.Children.Add(Label($"Codex Updated {Time(codexOk)}{(codexError != null ? $" · ⚠ {codexError}" : "")}",
-                    9, codexError != null ? Amber : Dim, HorizontalAlignment.Center));
+            if (!ShowCodex)
+                stack.Children.Add(Label($"Updated {Time(lastOk)}{(error != null ? $" · ⚠ {error}" : "")}",
+                    9, error != null ? Amber : Dim, HorizontalAlignment.Center, top: 4));
+            else
+            {
+                // One line: each icon with its own Update time; an error replaces the time.
+                var line = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 0) };
+                void Part(string icon, DateTime? ok, string? err, double left)
+                {
+                    var img = Logo(icon, 9);
+                    img.Margin = new Thickness(left, 0, 3, 0);
+                    line.Children.Add(img);
+                    line.Children.Add(Label(err != null ? $"⚠ {err}" : Time(ok), 9, err != null ? Amber : Dim, HorizontalAlignment.Center));
+                }
+                Part("claude", lastOk, error, 0);
+                Part("codex", codexOk, codexError, 8);
+                stack.Children.Add(line);
+            }
         }
         gauge.Content = stack;
         if (frame.LayoutTransform is not ScaleTransform s || s.ScaleX != settings.Scale)
@@ -246,6 +260,22 @@ class PrototypeWindow : Window
 
     /// Codex only when it is on this machine and the user hasn't turned it off.
     bool ShowCodex => settings.ShowCodex && CodexUsageClient.Installed;
+
+    static readonly Dictionary<string, BitmapImage> Logos = [];
+
+    /// The Claude spark or the Codex mark, `size` px square. With Codex shown they replace the names.
+    static Image Logo(string name, double size)
+    {
+        if (!Logos.TryGetValue(name, out var bmp))
+        {
+            bmp = new BitmapImage(new Uri($"pack://application:,,,/Icons/{name}.png"));
+            bmp.Freeze();
+            Logos[name] = bmp;
+        }
+        var img = new Image { Source = bmp, Width = size, Height = size, VerticalAlignment = VerticalAlignment.Center };
+        RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
+        return img;
+    }
 
     /// The full state and the controls, from right-click → Help.
     void ShowHelp()
@@ -371,26 +401,31 @@ class PrototypeWindow : Window
     }
 
     // A: two ring gauges side by side, Session countdown underneath.
-    // With Codex: a second pair of rings beside Claude's, each pair named above.
+    // With Codex: a second pair of rings beside Claude's, each pair under its icon.
     UIElement Rings()
     {
-        UIElement Pair(string? title, Usage? u, bool stale)
+        UIElement Pair(string? icon, Usage? u, bool stale)
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
             row.Children.Add(Ring(u?.SessionPct, "5h", stale));
             row.Children.Add(new Border { Width = 10 });
             row.Children.Add(Ring(u?.WeeklyPct, "7d", stale));
             var pair = new StackPanel();
-            if (title != null) pair.Children.Add(Label(title, 10, title == "Codex" ? CodexName : LimitName, HorizontalAlignment.Center, bold: true, bottom: 2));
+            if (icon != null)
+            {
+                var img = Logo(icon, 12);
+                img.Margin = new Thickness(0, 0, 0, 4);
+                pair.Children.Add(img);
+            }
             pair.Children.Add(row);
             pair.Children.Add(Label($"resets {(u == null ? "—" : Countdown(u.SessionReset))}", 10, Dim, HorizontalAlignment.Center, top: 4));
             return pair;
         }
         if (!ShowCodex) return Pair(null, last, error != null);
         var pairs = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
-        pairs.Children.Add(Pair("Claude", last, error != null));
+        pairs.Children.Add(Pair("claude", last, error != null));
         pairs.Children.Add(new Border { Width = 1, Background = Edge, Margin = new Thickness(10, 0, 10, 0) });
-        pairs.Children.Add(Pair("Codex", codexLast, codexError != null));
+        pairs.Children.Add(Pair("codex", codexLast, codexError != null));
         return pairs;
     }
 
@@ -427,72 +462,86 @@ class PrototypeWindow : Window
 
     // B: one horizontal line of text and thin bars, countdown at the end.
     // B: the two limits stacked, each name · % · bar; Session countdown and the Update time on the right.
-    // With Codex: its two rows under a thin line, the names in teal and "Codex" before its countdown.
+    // With Codex: its two rows under a thin line, each pair with its icon on the left.
     UIElement Pill()
     {
         var grid = new Grid();
-        for (var i = 0; i < 4; i++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        void Put(UIElement el, int row, int col, int span = 1)
+        for (var i = 0; i < 5; i++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        void Put(UIElement el, int row, int col, int span = 1, int rowSpan = 1)
         {
-            Grid.SetRow(el, row); Grid.SetColumn(el, col); Grid.SetColumnSpan(el, span); grid.Children.Add(el);
+            Grid.SetRow(el, row); Grid.SetColumn(el, col); Grid.SetColumnSpan(el, span); Grid.SetRowSpan(el, rowSpan);
+            grid.Children.Add(el);
         }
-        void Pair(int row, string? title, Brush nameColor, Usage? u, DateTime? ok, string? err)
+        void Pair(int row, string? icon, Usage? u, DateTime? ok, string? err)
         {
             grid.RowDefinitions.Add(new RowDefinition());
             grid.RowDefinitions.Add(new RowDefinition());
+            if (icon != null)
+            {
+                var img = Logo(icon, 16);
+                img.Margin = new Thickness(0, 0, 10, 0);
+                Put(img, row, 0, rowSpan: 2);
+            }
             void Limit(int r, string name, double? pct)
             {
-                Put(Label(name, 12, nameColor, HorizontalAlignment.Left, bold: true, right: 8, top: 2, bottom: 2), r, 0);
-                Put(Label(Pct(pct), 13, Text, HorizontalAlignment.Right, bold: true, right: 6), r, 1);
+                Put(Label(name, 12, LimitName, HorizontalAlignment.Left, bold: true, right: 8, top: 2, bottom: 2), r, 1);
+                Put(Label(Pct(pct), 13, Text, HorizontalAlignment.Right, bold: true, right: 6), r, 2);
                 var bar = (FrameworkElement)Bar(pct, 56, 4, horizontal: true, stale: err != null);
                 bar.VerticalAlignment = VerticalAlignment.Center;
-                Put(bar, r, 2);
+                Put(bar, r, 3);
             }
             Limit(row, "5h", u?.SessionPct);
             Limit(row + 1, "7d", u?.WeeklyPct);
-            Put(Label($"{(title != null ? title + " " : "")}↻ {(u == null ? "—" : Countdown(u.SessionReset))}",
-                12, Text, HorizontalAlignment.Right, left: 14), row, 3);
+            Put(Label($"↻ {(u == null ? "—" : Countdown(u.SessionReset))}", 12, Text, HorizontalAlignment.Right, left: 14), row, 4);
             Put(Label($"Updated {Time(ok)}{(err != null ? " ⚠" : "")}",
-                7.5, err != null ? Amber : Dim, HorizontalAlignment.Right, left: 14), row + 1, 3);
+                7.5, err != null ? Amber : Dim, HorizontalAlignment.Right, left: 14), row + 1, 4);
         }
-        Pair(0, ShowCodex ? "Claude" : null, LimitName, last, lastOk, error);
+        Pair(0, ShowCodex ? "claude" : null, last, lastOk, error);
         if (ShowCodex)
         {
             grid.RowDefinitions.Add(new RowDefinition());
-            Put(new Border { Height = 1, Background = Edge, Margin = new Thickness(0, 4, 0, 4) }, 2, 0, span: 4);
-            Pair(3, "Codex", CodexName, codexLast, codexOk, codexError);
+            Put(new Border { Height = 1, Background = Edge, Margin = new Thickness(0, 4, 0, 4) }, 2, 0, span: 5);
+            Pair(3, "codex", codexLast, codexOk, codexError);
         }
         return grid;
     }
 
-    // C: a narrow vertical strip with two filling columns, like batteries. With Codex: two more, named in teal.
+    // C: a narrow vertical strip with two filling columns, like batteries. With Codex: two more, each pair under its
+    // icon, with its own countdown.
     UIElement Strip()
     {
-        var cols = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
-        void Col(string name, double? pct, Brush nameColor, bool stale)
+        UIElement Pair(string? icon, Usage? u, bool stale)
         {
-            var col = new StackPanel { Margin = new Thickness(4, 0, 4, 0) };
-            col.Children.Add(Label(Pct(pct), 10, Text, HorizontalAlignment.Center, bold: true, bottom: 2));
-            var bar = Bar(pct, 12, 64, horizontal: false, stale);
-            ((FrameworkElement)bar).HorizontalAlignment = HorizontalAlignment.Center;
-            col.Children.Add(bar);
-            col.Children.Add(Label(name, 10, nameColor, HorizontalAlignment.Center, top: 2));
-            cols.Children.Add(col);
+            var cols = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
+            void Col(string name, double? pct)
+            {
+                var col = new StackPanel { Margin = new Thickness(4, 0, 4, 0) };
+                col.Children.Add(Label(Pct(pct), 10, Text, HorizontalAlignment.Center, bold: true, bottom: 2));
+                var bar = Bar(pct, 12, 64, horizontal: false, stale);
+                ((FrameworkElement)bar).HorizontalAlignment = HorizontalAlignment.Center;
+                col.Children.Add(bar);
+                col.Children.Add(Label(name, 10, Dim, HorizontalAlignment.Center, top: 2));
+                cols.Children.Add(col);
+            }
+            Col("5h", u?.SessionPct);
+            Col("7d", u?.WeeklyPct);
+            var pair = new StackPanel();
+            if (icon != null)
+            {
+                var img = Logo(icon, 12);
+                img.Margin = new Thickness(0, 0, 0, 4);
+                pair.Children.Add(img);
+            }
+            pair.Children.Add(cols);
+            pair.Children.Add(Label(u == null ? "—" : Countdown(u.SessionReset), 9, Dim, HorizontalAlignment.Center, top: 4));
+            return pair;
         }
-        Col("5h", last?.SessionPct, Dim, error != null);
-        Col("7d", last?.WeeklyPct, Dim, error != null);
-        var countdown = SessionCountdown();
-        if (ShowCodex)
-        {
-            cols.Children.Add(new Border { Width = 1, Background = Edge, Margin = new Thickness(4, 0, 4, 0) });
-            Col("5h", codexLast?.SessionPct, CodexName, codexError != null);
-            Col("7d", codexLast?.WeeklyPct, CodexName, codexError != null);
-            countdown += $" · {(codexLast == null ? "—" : Countdown(codexLast.SessionReset))}";
-        }
-        var stack = new StackPanel();
-        stack.Children.Add(cols);
-        stack.Children.Add(Label(countdown, 9, Dim, HorizontalAlignment.Center, top: 4));
-        return stack;
+        if (!ShowCodex) return Pair(null, last, error != null);
+        var pairs = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
+        pairs.Children.Add(Pair("claude", last, error != null));
+        pairs.Children.Add(new Border { Width = 1, Background = Edge, Margin = new Thickness(4, 0, 4, 0) });
+        pairs.Children.Add(Pair("codex", codexLast, codexError != null));
+        return pairs;
     }
 
     UIElement Bar(double? pct, double w, double h, bool horizontal, bool stale)
