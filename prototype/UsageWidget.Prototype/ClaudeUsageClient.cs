@@ -10,7 +10,7 @@ namespace UsageWidget.Prototype;
 // A Reset is null while that window hasn't started, e.g. no Session since the last one ended.
 record Usage(double SessionPct, DateTimeOffset? SessionReset, double WeeklyPct, DateTimeOffset? WeeklyReset);
 
-static class UsageClient
+static class ClaudeUsageClient
 {
     static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(15) };
     static readonly string CredentialsPath =

@@ -12,6 +12,8 @@ class Settings
     public bool Topmost { get; set; } = true;
     public bool Docked { get; set; }
     public int UpdateMinutes { get; set; } = 5;
+    /// Codex Usage under Claude's; only has an effect when Codex is on this machine.
+    public bool ShowCodex { get; set; } = true;
     /// Null until the user drags it: then it sits just above the clock.
     public double? Left { get; set; }
     public double? Top { get; set; }

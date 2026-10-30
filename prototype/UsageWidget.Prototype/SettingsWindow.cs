@@ -39,6 +39,7 @@ class SettingsWindow : Window
 
         Check("Always on top", s.Topmost, v => s.Topmost = v);
         Check("Docked in the taskbar", s.Docked, v => s.Docked = v);
+        if (CodexUsageClient.Installed) Check("Show Codex", s.ShowCodex, v => s.ShowCodex = v);
         Check("Start with Windows", StartWithWindows.IsOn, StartWithWindows.Set, save: false);
 
         var reset = new Button { Content = "Put it back above the clock", Margin = new Thickness(0, 12, 0, 0), Padding = new Thickness(8, 3, 8, 3) };

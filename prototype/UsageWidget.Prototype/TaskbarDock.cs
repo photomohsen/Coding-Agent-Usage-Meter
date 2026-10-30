@@ -34,13 +34,15 @@ class TaskbarDock : IDisposable
         button.Show();
     }
 
-    public void Render(Usage? last, string? error, string countdown)
+    public void Render(Usage? last, string? error, Usage? codex)
     {
         // The button label is "70 28": Weekly % then Session %. On a full taskbar Windows leaves room for about six
         // characters, so no names or % signs. The icon shows the time to the Session Reset.
-        button.Title = last == null
+        // Codex follows as "· 17 7"; Claude comes first so a full taskbar cuts Codex, not Claude.
+        button.Title = (last == null
             ? (error != null ? $"⚠ {error}" : "Claude: no Usage yet")
-            : $"{Pct(last.WeeklyPct)} {Pct(last.SessionPct)}{(error != null ? " ⚠" : "")}";
+            : $"{Pct(last.WeeklyPct)} {Pct(last.SessionPct)}{(error != null ? " ⚠" : "")}") +
+            (codex != null ? $" · {Pct(codex.WeeklyPct)} {Pct(codex.SessionPct)}" : "");
 
         var left = last == null ? "–" : Left(last.SessionReset);
         var color = Tint(last?.SessionPct, error);
