@@ -263,7 +263,7 @@ class PrototypeWindow : Window
     static readonly Dictionary<string, BitmapImage> Logos = [];
 
     /// The Claude spark or the Codex mark, `size` px square. With Codex shown they replace the names.
-    static Image Logo(string name, double size)
+    internal static Image Logo(string name, double size)
     {
         if (!Logos.TryGetValue(name, out var bmp))
         {

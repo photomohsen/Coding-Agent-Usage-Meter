@@ -62,7 +62,7 @@ class SettingsWindow : Window
         Line();
         Switch("Always on top", s.Topmost, v => s.Topmost = v);
         Switch("Docked in the taskbar", s.Docked, v => s.Docked = v);
-        if (CodexUsageClient.Installed) Switch("Show Codex", s.ShowCodex, v => s.ShowCodex = v);
+        if (CodexUsageClient.Installed) Switch("Show Codex", s.ShowCodex, v => s.ShowCodex = v, icon: "codex");
         Switch("Start with Windows", StartWithWindows.IsOn, StartWithWindows.Set, save: false);
 
         Line();
@@ -149,9 +149,20 @@ class SettingsWindow : Window
         return row;
     }
 
-    void Switch(string label, bool value, Action<bool> set, bool save = true)
+    /// `icon`: a logo from Icons/ in front of the label, like the widget marks that source.
+    void Switch(string label, bool value, Action<bool> set, bool save = true, string? icon = null)
     {
-        var box = new CheckBox { Content = label, IsChecked = value, Style = Style("Switch") };
+        object content = label;
+        if (icon != null)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal };
+            var logo = PrototypeWindow.Logo(icon, 16);
+            logo.Margin = new Thickness(0, 1, 8, 0);
+            row.Children.Add(logo);
+            row.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center });
+            content = row;
+        }
+        var box = new CheckBox { Content = content, IsChecked = value, Style = Style("Switch") };
         box.Click += (_, _) =>
         {
             if (save) Changed(() => set(box.IsChecked == true));
