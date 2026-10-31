@@ -63,6 +63,11 @@ static class Qa
         {
             new(18244, "node", 3000, true) { Project = "usage-site", Folder = @"C:\Users\you\Projects\usage-site", CommandLine = "node node_modules/next/dist/bin/next dev" },
             new(20112, "node", 5173, true) { Project = "design-tool", Folder = @"C:\Users\you\Projects\design-tool" },
+            new(35808, "docker", 8069, true)
+            {
+                Project = "accounting", Folder = @"\\wsl.localhost\Ubuntu\home\you\accounting", CommandLine = "accounting-odoo-1 · odoo:17",
+                Wsl = new WslTarget("Ubuntu", ["accounting-db-1", "accounting-odoo-1"], null),
+            },
         };
         foreach (var compact in new[] { false, true })
             foreach (var look in new[] { 0, 2 })
@@ -76,6 +81,7 @@ static class Qa
             SavePopup(widget.QaTip(src), Path.Combine(folder, $"tip-{file}.png"));
         }
         SavePopup(widget.QaServerTip(servers[0]), Path.Combine(folder, "tip-server.png"));
+        SavePopup(widget.QaServerTip(servers[2]), Path.Combine(folder, "tip-server-wsl.png"));
         var confirm = Confirm.Make(null, "Close usage-site?",
             "Stops node (PID 18244) on localhost:3000 and everything it started. Unsaved work in it is lost.", "Close");
         var card = (FrameworkElement)confirm.Content;
