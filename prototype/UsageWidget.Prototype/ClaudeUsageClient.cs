@@ -1,4 +1,5 @@
 // PROTOTYPE: throwaway. Reads the Claude Code token read-only and asks for Usage (ADR 0001).
+using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -24,18 +25,12 @@ static class ClaudeUsageClient
         RetryAfter = null;
         if (!File.Exists(CredentialsPath)) return (null, "Sign in to Claude Code first");
 
-        string token;
-        long expiresAt;
-        // Share everything so Claude Code can keep writing the file while we read it. Never write it.
-        using (var stream = new FileStream(CredentialsPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
-        using (var doc = await JsonDocument.ParseAsync(stream))
-        {
-            var oauth = doc.RootElement.GetProperty("claudeAiOauth");
-            token = oauth.GetProperty("accessToken").GetString()!;
-            expiresAt = oauth.GetProperty("expiresAt").GetInt64();
-        }
-        // Still signed in: only the command-line claude refreshes this file, so it can sit expired for a while.
-        if (DateTimeOffset.FromUnixTimeMilliseconds(expiresAt) < DateTimeOffset.UtcNow)
+        var (token, expires) = await ReadToken();
+        // Only the command-line claude refreshes this file (the desktop app keeps its own sign-in), so it can sit
+        // expired while the user works. Ask the CLI to refresh it rather than refreshing it ourselves.
+        if (expires < DateTimeOffset.UtcNow && await RefreshWithCli())
+            (token, expires) = await ReadToken();
+        if (expires < DateTimeOffset.UtcNow)
             return (null, "Token expired: run claude in a terminal once to refresh it");
 
         var req = new HttpRequestMessage(HttpMethod.Get, "https://api.anthropic.com/api/oauth/usage");
@@ -67,6 +62,44 @@ static class ClaudeUsageClient
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
         {
             return (null, "Offline");
+        }
+    }
+
+    static async Task<(string Token, DateTimeOffset Expires)> ReadToken()
+    {
+        // Share everything so Claude Code can keep writing the file while we read it. Never write it.
+        using var stream = new FileStream(CredentialsPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var doc = await JsonDocument.ParseAsync(stream);
+        var oauth = doc.RootElement.GetProperty("claudeAiOauth");
+        return (oauth.GetProperty("accessToken").GetString()!,
+            DateTimeOffset.FromUnixTimeMilliseconds(oauth.GetProperty("expiresAt").GetInt64()));
+    }
+
+    static DateTime lastRefresh = DateTime.MinValue;
+
+    /// `claude auth status` refreshes an expired token and saves it, like any claude command, without using any
+    /// Usage. At most every 10 minutes, so a CLI that can't refresh isn't started on every Update.
+    static async Task<bool> RefreshWithCli()
+    {
+        if (DateTime.Now - lastRefresh < TimeSpan.FromMinutes(10)) return false;
+        lastRefresh = DateTime.Now;
+        try
+        {
+            var start = new ProcessStartInfo("cmd.exe", "/c claude auth status")
+            {
+                CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true,
+            };
+            // Started from inside a Claude Code session, the CLI would use that session's sign-in, not the file's.
+            foreach (var name in start.Environment.Keys.Where(k => k.StartsWith("CLAUDE") || k.StartsWith("ANTHROPIC")).ToList())
+                start.Environment.Remove(name);
+            using var cli = Process.Start(start)!;
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            await cli.WaitForExitAsync(timeout.Token);
+            return true;
+        }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or OperationCanceledException or InvalidOperationException)
+        {
+            return false;
         }
     }
 
