@@ -34,8 +34,9 @@ static class ClaudeUsageClient
             token = oauth.GetProperty("accessToken").GetString()!;
             expiresAt = oauth.GetProperty("expiresAt").GetInt64();
         }
+        // Still signed in: only the command-line claude refreshes this file, so it can sit expired for a while.
         if (DateTimeOffset.FromUnixTimeMilliseconds(expiresAt) < DateTimeOffset.UtcNow)
-            return (null, "Open Claude Code to sign in again");
+            return (null, "Token expired: run claude in a terminal once to refresh it");
 
         var req = new HttpRequestMessage(HttpMethod.Get, "https://api.anthropic.com/api/oauth/usage");
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);

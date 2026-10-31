@@ -24,7 +24,7 @@ static class Qa
             ("1-claude-only", false, (U(42, 28), at, null), (null, null, null)),
             ("2-both-normal", true, (U(42, 28), at, null), (U(13, 18), at, null)),
             ("3-both-high", true, (U(82, 95), at, null), (U(91, 60), at, null)),
-            ("4-claude-stale", true, (U(42, 28), at.AddHours(-1), "Offline"), (U(13, 18), at, null)),
+            ("4-claude-stale", true, (U(42, 28), at.AddHours(-1), "Token expired: run claude in a terminal once to refresh it"), (U(13, 18), at, null)),
             ("5-codex-stale", true, (U(42, 28), at, null), (U(13, 18), at.AddHours(-2), "Open Codex to sign in again")),
             ("6-codex-none", true, (U(42, 28), at, null), (null, null, "Sign in to Codex first")),
         };

@@ -579,7 +579,13 @@ class PrototypeWindow : Window
 
     static bool NeedsAction(string err) => err.Contains("sign in", StringComparison.OrdinalIgnoreCase);
 
-    static string Short(string err) => NeedsAction(err) ? "Sign in" : err.Length <= 14 ? err : "Update failed";
+    /// The part before a colon is the short reason; the rest is in the tooltip.
+    static string Short(string err)
+    {
+        if (NeedsAction(err)) return "Sign in";
+        var head = err.Split(':')[0];
+        return head.Length <= 14 ? head : "Update failed";
+    }
 
     /// Grey, like its numbers, while they are Stale.
     static FrameworkElement SourceLogo(Source src, double size)

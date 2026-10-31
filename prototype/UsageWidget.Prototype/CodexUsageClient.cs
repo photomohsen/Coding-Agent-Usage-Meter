@@ -48,7 +48,7 @@ static class CodexUsageClient
         {
             return (null, "Sign in to Codex with ChatGPT");
         }
-        if (Expiry(token) is { } exp && exp < DateTimeOffset.UtcNow) return (null, "Open Codex to sign in again");
+        if (Expiry(token) is { } exp && exp < DateTimeOffset.UtcNow) return (null, "Token expired: open Codex once to refresh it");
 
         var req = new HttpRequestMessage(HttpMethod.Get, "https://chatgpt.com/backend-api/wham/usage");
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
