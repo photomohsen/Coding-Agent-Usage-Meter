@@ -21,6 +21,9 @@ static class Program
             app.Run();
             return 0;
         }
+        // One widget at a time: a second start (desktop shortcut, Start with Windows) just exits.
+        using var single = new Mutex(true, @"Local\CodingAgentUsageMeter", out var first);
+        if (!first) return 0;
         return app.Run(new PrototypeWindow());
     }
 

@@ -157,13 +157,16 @@ class LookOptions
 /// Start with Windows is the launcher in the user's Startup folder, not a stored value: the file is the truth.
 static class StartWithWindows
 {
-    static readonly string Launcher = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.Startup), "Claude Gauge.vbs");
+    static readonly string Folder = Environment.GetFolderPath(Environment.SpecialFolder.Startup);
+    static readonly string Launcher = Path.Combine(Folder, "Coding Agent Usage Meter.vbs");
+    // Launchers from before the rename: still counted as on, and replaced or removed by Set.
+    static readonly string[] OldLaunchers = [Path.Combine(Folder, "Claude Gauge.vbs"), Path.Combine(Folder, "Claude Usage Widget.lnk")];
 
-    public static bool IsOn => File.Exists(Launcher);
+    public static bool IsOn => File.Exists(Launcher) || OldLaunchers.Any(File.Exists);
 
     public static void Set(bool on)
     {
+        foreach (var old in OldLaunchers) File.Delete(old);
         if (!on) { File.Delete(Launcher); return; }
         // Through the signed dotnet.exe (company app control blocks our own .exe); 0 hides the console window.
         var dll = typeof(StartWithWindows).Assembly.Location;

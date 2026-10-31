@@ -32,6 +32,8 @@ if errorlevel 1 (
 )
 
 echo Adding a shortcut to the desktop...
+rem The shortcut had this name before the rename.
+powershell -NoProfile -Command "Remove-Item ([IO.Path]::Combine([Environment]::GetFolderPath('Desktop'), 'Claude Usage Widget.lnk')) -ErrorAction SilentlyContinue"
 powershell -NoProfile -Command "$s = (New-Object -ComObject WScript.Shell).CreateShortcut([IO.Path]::Combine([Environment]::GetFolderPath('Desktop'), 'Coding Agent Usage Meter.lnk')); $s.TargetPath = \"$env:WINDIR\System32\wscript.exe\"; $s.Arguments = '\"%~dp0Start Widget.vbs\"'; $s.WorkingDirectory = '%~dp0'; $s.IconLocation = '%~dp0widget.ico'; $s.Description = 'Shows your Claude Code and Codex usage limits'; $s.Save()"
 
 echo Starting the widget...
