@@ -51,7 +51,7 @@ class SettingsWindow : Window
         TextElement.SetForeground(card, Theme.Primary);
         Content = card;
 
-        Row("Look", Segments(["Rings", "Pill", "Strip"], s.Look, i => s.Look = i));
+        Row("Look", Segments(PrototypeWindow.LookNames, s.Look, i => s.Look = i, columns: 4));
         Row("Tray icon", Segments(["Bars", "Rings"], s.TrayStyle, i => s.TrayStyle = i));
         Row("Size", Percent(s.Scale, 50, 300, v => s.Scale = v));
         Switch("Compact", s.Compact, v => s.Compact = v);
@@ -102,8 +102,14 @@ class SettingsWindow : Window
 
     void Row(string label, FrameworkElement control)
     {
-        var row = new DockPanel { Height = 40 };
-        row.Children.Add(new TextBlock { Text = label, Width = LabelWidth, FontSize = 13, VerticalAlignment = VerticalAlignment.Center });
+        // A control taller than one row (the Look grid) gets its label at the top, in line with its first row.
+        var tall = control.Tag is "tall";
+        var row = new DockPanel { MinHeight = 40, Margin = new Thickness(0, tall ? 6 : 0, 0, tall ? 6 : 0) };
+        row.Children.Add(new TextBlock
+        {
+            Text = label, Width = LabelWidth, FontSize = 13, Margin = new Thickness(0, tall ? 7 : 0, 0, 0),
+            VerticalAlignment = tall ? VerticalAlignment.Top : VerticalAlignment.Center,
+        });
         control.Width = ControlWidth;
         control.VerticalAlignment = VerticalAlignment.Center;
         row.Children.Add(control);
@@ -112,23 +118,27 @@ class SettingsWindow : Window
 
     void Line() => panel.Children.Add(new Border { Height = 1, Background = Theme.Divider, Margin = new Thickness(0, 8, 0, 8) });
 
-    /// One choice of several, as a row of segments on a faint track.
-    FrameworkElement Segments(string[] names, int selected, Action<int> set)
+    /// One choice of several, as segments on a faint track; more than `columns` wrap onto further rows.
+    FrameworkElement Segments(string[] names, int selected, Action<int> set, int columns = 0)
     {
+        if (columns <= 0) columns = names.Length;
         var grid = new Grid();
         var group = Guid.NewGuid().ToString();
+        for (var c = 0; c < columns; c++) grid.ColumnDefinitions.Add(new ColumnDefinition());
+        for (var r = 0; r < (names.Length + columns - 1) / columns; r++) grid.RowDefinitions.Add(new RowDefinition());
         for (var i = 0; i < names.Length; i++)
         {
             var index = i;
-            grid.ColumnDefinitions.Add(new ColumnDefinition());
             var b = new RadioButton { Content = names[i], GroupName = group, IsChecked = i == selected, Style = Style("Segment") };
             b.Checked += (_, _) => Changed(() => set(index));
-            Grid.SetColumn(b, i);
+            Grid.SetColumn(b, i % columns);
+            Grid.SetRow(b, i / columns);
             grid.Children.Add(b);
         }
         return new Border
         {
             Background = Theme.Divider, CornerRadius = new CornerRadius(6), Padding = new Thickness(2), Child = grid,
+            Tag = names.Length > columns ? "tall" : null,
         };
     }
 

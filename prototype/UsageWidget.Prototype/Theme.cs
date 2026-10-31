@@ -11,7 +11,11 @@ static class Theme
         // Stale: grey fill and dimmed numbers. Critical: an action is needed (sign in), not a high Usage.
         StaleFill = Hex("#7A7A7A"), StaleText = Hex("#A0A0A0"), Critical = Hex("#FF99A4"),
         Track = Hex("#1FFFFFFF"), Primary = Hex("#F5F5F5"), Secondary = Hex("#C5C5C5"), Tertiary = Hex("#9D9D9D"),
-        CardBg = Hex("#202020"), Edge = Hex("#26FFFFFF"), Divider = Hex("#24FFFFFF");
+        CardBg = Hex("#202020"), Edge = Hex("#26FFFFFF"), Divider = Hex("#24FFFFFF"),
+        // The dot in front of a running dev server.
+        Running = Hex("#66BB6A"),
+        // Meter look: the unlit blocks keep a hint of their colour, so the amber and red end shows before it lights up.
+        MeterOff = Hex("#1AFFFFFF"), MeterOffAmber = Hex("#29FFB300"), MeterOffRed = Hex("#2EEF5350");
 
     public static readonly FontFamily Font = new("Segoe UI Variable Text, Segoe UI"),
         Icons = new("Segoe Fluent Icons, Segoe MDL2 Assets");
@@ -117,6 +121,104 @@ static class Theme
               </ContentPresenter.Resources>
             </ContentPresenter>
           </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Hover on a source: a card in the widget's style. MiniTip is Halo's one line. -->
+  <Style x:Key="CardTip" TargetType="ToolTip">
+    <Setter Property="OverridesDefaultStyle" Value="True"/>
+    <Setter Property="HasDropShadow" Value="False"/>
+    <Setter Property="Foreground" Value="#F5F5F5"/>
+    <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ToolTip">
+          <Border Margin="6,2,6,10" Background="#2B2B2B" BorderBrush="#29FFFFFF" BorderThickness="1" CornerRadius="8"
+                  Padding="10,8" Effect="{StaticResource Shadow}" MaxWidth="360">
+            <ContentPresenter/>
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <Style x:Key="MiniTip" TargetType="ToolTip" BasedOn="{StaticResource CardTip}">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ToolTip">
+          <Border Margin="6,2,6,10" Background="#2B2B2B" BorderBrush="#29FFFFFF" BorderThickness="1" CornerRadius="6"
+                  Padding="8,4" Effect="{StaticResource Shadow}">
+            <ContentPresenter/>
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Dev servers: Close at the end of a row, and Halo's short × -->
+  <Style x:Key="ServerClose" TargetType="Button">
+    <Setter Property="Foreground" Value="#EF5350"/>
+    <Setter Property="FontSize" Value="10"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="Bd" Background="Transparent" BorderBrush="#EF5350" BorderThickness="1" CornerRadius="4" Padding="6,0,6,1">
+            <ContentPresenter VerticalAlignment="Center"/>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Bd" Property="Background" Value="#29EF5350"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <Style x:Key="ServerX" TargetType="Button">
+    <Setter Property="Foreground" Value="#9D9D9D"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="Bd" Background="Transparent" CornerRadius="3" Width="14" Height="14">
+            <Path Data="M1,1 L7,7 M7,1 L1,7" Stroke="{TemplateBinding Foreground}" StrokeThickness="1.4"
+                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Bd" Property="Background" Value="#29EF5350"/>
+              <Setter Property="Foreground" Value="#EF5350"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- The Close confirmation's buttons: grey, or red for the one that stops it. -->
+  <Style x:Key="DialogButton" TargetType="Button">
+    <Setter Property="Foreground" Value="#F5F5F5"/>
+    <Setter Property="Background" Value="#14FFFFFF"/>
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Grid>
+            <Border Background="{TemplateBinding Background}" CornerRadius="4"/>
+            <Border x:Name="Hi" Background="#14FFFFFF" CornerRadius="4" Visibility="Hidden"/>
+            <ContentPresenter Margin="12,3,12,4" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Hi" Property="Visibility" Value="Visible"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value>
     </Setter>

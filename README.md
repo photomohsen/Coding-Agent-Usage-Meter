@@ -81,7 +81,7 @@ Download the new ZIP, unzip it over the old folder, and double-click `Install.cm
 |---|---|
 | Click | Update now |
 | Drag | Move it (it remembers where). Drop it near the clock and it snaps into place just above it |
-| Hover | See the full numbers and reset times |
+| Hover | See a card with both limits, their reset times, and why the numbers are old if they are |
 | Right-click | Open the menu: Settings, Compact, Quit |
 | Ctrl + mouse wheel | Make it bigger or smaller |
 | ← / → | Switch look |
@@ -91,6 +91,18 @@ Download the new ZIP, unzip it over the old folder, and double-click `Install.cm
 | Pill (default) | Rings | Strip |
 |---|---|---|
 | ![Pill](docs/images/pill.png) | ![Rings](docs/images/rings.png) | ![Strip](docs/images/strip.png) |
+
+There are seven more to try, in **Settings → Look** or with ← / →:
+
+| Look | Shows |
+|---|---|
+| Gauge | A half dial: 5h outside, 7d inside |
+| Meter | Ten blocks per limit; the last three are amber and red |
+| Target | A double ring around the logo, like the tray icon |
+| Numbers | Just the two numbers, big, amber and red when high |
+| Mini | One thin line per agent: the higher % and the time to reset |
+| Pace | The Pill's bars plus a tick for an even pace; says "fast" when you're ahead of it |
+| Halo | Only the rings around each logo, no text. Hover a ring for the numbers |
 
 In **Settings** you can also make it **Compact** (less space) or change its size.
 
@@ -112,7 +124,7 @@ The widget also hides by itself while a full-screen app, game or presentation is
 
 ![Settings](docs/images/settings.png)
 
-It also lists any local dev servers you have running (`localhost:3000` and so on), so you can open or stop them with one click.
+It also lists any local dev servers you have running (`localhost:3000` and so on), under the look. Click `localhost:3000` to open it, or **Close** to stop it; Close asks first. Hover a row to see the project folder and command.
 
 ## Is it safe?
 

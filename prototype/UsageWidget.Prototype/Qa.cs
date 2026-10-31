@@ -30,10 +30,34 @@ static class Qa
         };
         var widget = new PrototypeWindow();
         foreach (var compact in new[] { false, true })
-            foreach (var (look, name) in new[] { (0, "A-rings"), (1, "B-pill"), (2, "C-strip") })
+            foreach (var (look, name) in PrototypeWindow.LookNames.Select((n, i) => (i, $"{(char)('A' + i)}-{n.ToLower()}")))
                 foreach (var s in states)
                     Save(widget.QaCard(look, compact, s.Codex, s.Claude, s.Cx),
                         Path.Combine(folder, $"{name}{(compact ? "-compact" : "")}-{s.Name}.png"));
+        // Dev servers under the looks, and Halo's short rows.
+        var servers = new List<DevServer>
+        {
+            new(18244, "node", 3000, true) { Project = "usage-site", Folder = @"C:\Users\you\Projects\usage-site", CommandLine = "node node_modules/next/dist/bin/next dev" },
+            new(20112, "node", 5173, true) { Project = "design-tool", Folder = @"C:\Users\you\Projects\design-tool" },
+        };
+        foreach (var compact in new[] { false, true })
+            foreach (var look in new[] { 0, 4, 5, 8, 9 })
+                Save(widget.QaCard(look, compact, true, states[1].Claude, states[1].Cx, servers),
+                    Path.Combine(folder, $"servers-{(char)('A' + look)}-{PrototypeWindow.LookNames[look].ToLower()}{(compact ? "-compact" : "")}.png"));
+        // The hover cards: every look's card and Halo's one line, on a normal, a Stale and a no-Usage source.
+        foreach (var (look, si, src, file) in new[] { (8, 1, 0, "full-normal"), (8, 3, 0, "full-stale"), (8, 5, 1, "full-signin"),
+                     (9, 1, 0, "mini-normal"), (9, 4, 1, "mini-stale"), (9, 5, 1, "mini-none") })
+        {
+            var s = states[si];
+            widget.QaCard(look, false, s.Codex, s.Claude, s.Cx);
+            SavePopup(widget.QaTip(src), Path.Combine(folder, $"tip-{file}.png"));
+        }
+        SavePopup(widget.QaServerTip(servers[0]), Path.Combine(folder, "tip-server.png"));
+        var confirm = Confirm.Make(null, "Close usage-site?",
+            "Stops node (PID 18244) on localhost:3000 and everything it started. Unsaved work in it is lost.", "Close");
+        var card = (FrameworkElement)confirm.Content;
+        confirm.Content = null;
+        Save(card, Path.Combine(folder, "confirm.png"));
         // A ContextMenu can only be drawn while it is open in its own popup.
         var menu = widget.QaMenu();
         menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Absolute;
@@ -44,6 +68,16 @@ static class Qa
         Save(SettingsWindow.QaContent(), Path.Combine(folder, "settings.png"));
         widget.Close();
         SaveTray(Path.Combine(folder, "tray.png"));
+    }
+
+    /// A tooltip has its template only while it is open in its popup.
+    static void SavePopup(ToolTip tip, string path)
+    {
+        tip.Placement = System.Windows.Controls.Primitives.PlacementMode.Absolute;
+        tip.IsOpen = true;
+        tip.UpdateLayout();
+        Save(tip, path, host: false);
+        tip.IsOpen = false;
     }
 
     /// Every tray icon state as bars and as rings, at its real pixel size and blown up 8× (no smoothing), on a dark and a
