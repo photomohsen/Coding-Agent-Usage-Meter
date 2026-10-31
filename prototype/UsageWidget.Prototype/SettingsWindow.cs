@@ -21,7 +21,7 @@ class SettingsWindow : Window
     {
         s = settings;
         this.apply = apply;
-        Title = "Claude Gauge settings";
+        Title = "Coding Agent Usage Meter settings";
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;

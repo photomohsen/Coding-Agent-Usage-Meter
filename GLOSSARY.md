@@ -1,6 +1,6 @@
-# Claude Usage Widget
+# Coding Agent Usage Meter
 
-A small always-on-top desktop widget that shows how much of the user's Claude plan limits has been used.
+A small always-on-top desktop widget that shows how much of the user's coding agent plan limits (Claude Code, Codex) has been used.
 
 ## Language
 

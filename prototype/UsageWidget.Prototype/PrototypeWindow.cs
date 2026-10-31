@@ -42,7 +42,7 @@ class PrototypeWindow : Window
     {
         variants = [("A", "Rings", Rings), ("B", "Pill", Pill), ("C", "Strip", Strip)];
 
-        Title = "PROTOTYPE Claude usage widget";
+        Title = "PROTOTYPE Coding Agent Usage Meter";
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
@@ -301,7 +301,7 @@ class PrototypeWindow : Window
                 (codexError != null ? $"\n⚠ {codexError}{(codexLast != null ? " (showing the Codex logs)" : "")}" : "")) +
             "\n\nClick: update · drag: move · Ctrl+wheel: size · ←/→: variant · right-click: menu" +
             "\nDev servers: click localhost to open it · hover a row for its folder · Close stops it",
-            "Claude Gauge", MessageBoxButton.OK, MessageBoxImage.Information);
+            "Coding Agent Usage Meter", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     /// Rebuilds the Dev servers list only when it changed; hidden when there are none.

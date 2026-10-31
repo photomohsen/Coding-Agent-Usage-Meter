@@ -1,4 +1,4 @@
-# Claude Usage Widget
+# Coding Agent Usage Meter
 
 ## Agent skills
 

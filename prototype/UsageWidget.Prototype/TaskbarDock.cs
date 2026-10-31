@@ -25,7 +25,7 @@ class TaskbarDock : IDisposable
     {
         button = new Window
         {
-            Title = "Claude usage", ShowInTaskbar = true, ShowActivated = false,
+            Title = "Coding Agent Usage Meter", ShowInTaskbar = true, ShowActivated = false,
             Width = 1, Height = 1, Left = -10000, Top = -10000, WindowState = WindowState.Minimized,
         };
         hwnd = new WindowInteropHelper(button).EnsureHandle();

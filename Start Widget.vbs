@@ -1,4 +1,4 @@
-' Starts the Claude Usage Widget with no console window.
+' Starts the Coding Agent Usage Meter with no console window.
 Set fso = CreateObject("Scripting.FileSystemObject")
 Set shell = CreateObject("WScript.Shell")
 dll = fso.GetParentFolderName(WScript.ScriptFullName) & "\prototype\UsageWidget.Prototype\bin\Debug\net10.0-windows\UsageWidget.Prototype.dll"

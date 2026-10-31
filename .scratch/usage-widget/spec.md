@@ -1,4 +1,4 @@
-# Spec: Claude Usage Widget
+# Spec: Coding Agent Usage Meter
 
 Status: ready-for-agent
 
