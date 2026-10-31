@@ -11,7 +11,15 @@ static class Program
     {
         // Our own taskbar identity, so the docked button doesn't group with other dotnet.exe apps.
         SetCurrentProcessExplicitAppUserModelID("ClaudeUsageWidget.Prototype");
-        new Application().Run(new PrototypeWindow(startDocked: args.Contains("--docked")));
+        var app = new Application { Resources = Theme.Load() };
+        if (Array.IndexOf(args, "--qa") is var i and >= 0)
+        {
+            app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            app.Startup += (_, _) => { Qa.Run(args.ElementAtOrDefault(i + 1) ?? "qa"); app.Shutdown(); };
+            app.Run();
+            return;
+        }
+        app.Run(new PrototypeWindow(startDocked: args.Contains("--docked")));
     }
 
     [System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
