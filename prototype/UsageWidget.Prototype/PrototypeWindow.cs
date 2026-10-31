@@ -377,7 +377,7 @@ class PrototypeWindow : Window
     void BuildServers()
     {
         var halo = narrow;
-        var key = $"{halo}|" + string.Join(",", servers.Select(s => $"{s.Pid}:{s.Port}"));
+        var key = $"{halo}|" + string.Join(",", servers.Select(s => $"{s.Pid}:{s.Port}:{s.Project}"));
         if (key == serversKey) return;
         serversKey = key;
 
@@ -391,7 +391,7 @@ class PrototypeWindow : Window
             var close = halo
                 ? new Button { Style = (Style)FindResource("ServerX"), Margin = new Thickness(6, 0, 0, 0) }
                 : new Button { Style = (Style)FindResource("ServerClose"), Content = "Close", Margin = new Thickness(8, 0, 0, 0) };
-            close.ToolTip = $"Stop {server.Name} (PID {server.Pid}) and everything it started";
+            close.ToolTip = StopsWhat(server);
             close.Click += (_, _) => ConfirmClose(server);
             DockPanel.SetDock(close, System.Windows.Controls.Dock.Right);
             row.Children.Add(close);
@@ -421,7 +421,10 @@ class PrototypeWindow : Window
         head.Children.Add(Label(server.Project, 12, Text, HorizontalAlignment.Left, bold: true));
         card.Children.Add(head);
         card.Children.Add(Wrapped(server.Folder ?? "folder unknown", 12, Theme.Secondary, top: 2));
-        card.Children.Add(Wrapped($"{server.Name} · PID {server.Pid} · {(server.LoopbackOnly ? "only this PC" : "reachable from the network")} · " +
+        var runs = server.Wsl is { } w
+            ? w.Containers.Length > 0 ? $"Docker in WSL ({w.Distro}) · {string.Join(", ", w.Containers)}" : $"{server.Name} in WSL ({w.Distro}) · PID {w.LinuxPid}"
+            : $"{server.Name} · PID {server.Pid}";
+        card.Children.Add(Wrapped($"{runs} · {(server.LoopbackOnly ? "only this PC" : "reachable from the network")} · " +
             $"click to open {server.Url}", 11, Dim, top: 4));
         if (server.CommandLine is { } cmd) card.Children.Add(Wrapped(cmd, 11, Dim, top: 2));
         return new ToolTip { Style = (Style)FindResource("CardTip"), Content = card };
@@ -453,13 +456,21 @@ class PrototypeWindow : Window
         return link;
     }
 
-    void ConfirmClose(DevServer server)
+    /// What Close stops: the process and what it started, or for a WSL port the containers or Linux process behind it.
+    static string StopsWhat(DevServer server) => server.Wsl is { } w
+        ? w.Containers.Length > 0 ? $"Stop the {server.Project} containers in WSL ({string.Join(", ", w.Containers)})"
+            : $"Stop {server.Name} (PID {w.LinuxPid}) in WSL"
+        : $"Stop {server.Name} (PID {server.Pid}) and everything it started";
+
+    async void ConfirmClose(DevServer server)
     {
-        if (!Confirm.Ask(this, $"Close {server.Project}?",
-                $"Stops {server.Name} (PID {server.Pid}) on {server.Url} and everything it started. Unsaved work in it is lost.",
-                "Close"))
+        var body = server.Wsl is { Containers.Length: > 0 }
+            ? $"{StopsWhat(server)}, which serve {server.Url}. They keep their data and start again with docker compose up."
+            : $"{StopsWhat(server)} on {server.Url}. Unsaved work in it is lost.";
+        if (!Confirm.Ask(this, $"Close {server.Project}?", body, "Close"))
             return;
-        if (DevServers.Close(server) is { } err)
+        // Stopping containers takes a few seconds, so it runs off the UI thread.
+        if (await Task.Run(() => DevServers.Close(server)) is { } err)
             MessageBox.Show(this, $"Could not close {server.Url}:\n{err}", "Close dev server",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         UpdateServers();

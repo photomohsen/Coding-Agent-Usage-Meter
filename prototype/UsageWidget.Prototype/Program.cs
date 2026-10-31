@@ -7,8 +7,10 @@ namespace UsageWidget.Prototype;
 static class Program
 {
     [STAThread]
-    static void Main(string[] args)
+    static int Main(string[] args)
     {
+        if (Array.IndexOf(args, "--e2e") is var e and >= 0)
+            return E2e.Run(args.ElementAtOrDefault(e + 1));
         // Our own identity, so our windows don't group with other dotnet.exe apps.
         SetCurrentProcessExplicitAppUserModelID("ClaudeUsageWidget.Prototype");
         var app = new Application { Resources = Theme.Load() };
@@ -17,9 +19,9 @@ static class Program
             app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
             app.Startup += (_, _) => { Qa.Run(args.ElementAtOrDefault(i + 1) ?? "qa"); app.Shutdown(); };
             app.Run();
-            return;
+            return 0;
         }
-        app.Run(new PrototypeWindow());
+        return app.Run(new PrototypeWindow());
     }
 
     [System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
