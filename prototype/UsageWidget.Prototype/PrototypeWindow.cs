@@ -1,5 +1,6 @@
 // PROTOTYPE: throwaway. A tray icon, no hotkey. Settings (look, size, position...) live in Settings.cs.
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -17,9 +18,9 @@ class PrototypeWindow : Window
     static readonly Brush Normal = Theme.Normal, Amber = Theme.Amber, Red = Theme.Red, Track = Theme.Track,
         Text = Theme.Primary, Dim = Theme.Tertiary, Edge = Theme.Edge;
 
-    readonly (string Key, string Name, Func<UIElement> Build)[] variants;
+    readonly (string Key, string Name, Func<Source, LookOptions, FrameworkElement> Build)[] variants;
     /// In the order of Settings.Look; the Settings window shows the same names.
-    internal static readonly string[] LookNames = ["Rings", "Pill", "Strip", "Gauge", "Meter", "Target", "Numbers", "Mini", "Pace", "Halo"];
+    internal static readonly string[] LookNames = LookOptions.Names;
     readonly Settings settings = Settings.Load();
     readonly DispatcherTimer updateTimer;
     TrayIcon? tray;
@@ -45,10 +46,12 @@ class PrototypeWindow : Window
     List<DevServer> servers = [];
     // While a hover card is open the per-second Render waits, so the card isn't rebuilt away under the mouse.
     bool tipOpen;
+    // The look is too narrow for full server rows; set by Render.
+    bool narrow;
 
     public PrototypeWindow()
     {
-        variants = new Func<UIElement>[] { Rings, Pill, Strip, Gauge, Meter, Target, Numbers, Mini, Pace, Halo }
+        variants = new Func<Source, LookOptions, FrameworkElement>[] { BarsBlock, RingsBlock, TargetBlock, GaugeBlock, StripBlock, NumbersBlock }
             .Select((build, i) => (((char)('A' + i)).ToString(), LookNames[i], build)).ToArray();
 
         Title = "PROTOTYPE Coding Agent Usage Meter";
@@ -258,14 +261,13 @@ class PrototypeWindow : Window
         var stack = new StackPanel();
         if (DateTime.Now < flashUntil)
             stack.Children.Add(Label($"◀ {v.Key} · {v.Name} ▶", 10, Amber, HorizontalAlignment.Center));
-        stack.Children.Add(v.Build());
+        stack.Children.Add(Arranged(v.Build, Options));
         gauge.Content = stack;
-        // Text carries its own space above the letters; a logo or a ring on top doesn't, so it gets more padding.
-        var textOnTop = current is 1 or 4 or 6 or 7 or 8 || (current == 2 && !ShowCodex);
-        // Mini is small by design, so it always gets the Compact padding. Halo is only rings: the same space all round.
-        frame.Padding = current == 9 ? new Thickness(Gap(8, 5)) :
-            settings.Compact || current == 7 ? new Thickness(8, textOnTop ? 4.5 : 7.5, 8, 6) : new Thickness(14, 12, 14, 12);
-        frame.CornerRadius = new CornerRadius(Gap(10, 8));
+        // The same tight spacing in every look and set: Compact shows fewer parts, not less space.
+        frame.Padding = new Thickness(8, 6, 8, 6);
+        frame.CornerRadius = new CornerRadius(10);
+        stack.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        narrow = stack.DesiredSize.Width < 150;
         if (frame.LayoutTransform is not ScaleTransform s || s.ScaleX != settings.Scale)
             frame.LayoutTransform = new ScaleTransform(settings.Scale, settings.Scale);
         BuildServers();
@@ -297,7 +299,7 @@ class PrototypeWindow : Window
 
     /// QA only (--qa): the card with made-up Usage, taken out of the window so it can be drawn to a file.
     internal FrameworkElement QaCard(int look, bool compact, bool codex, (Usage?, DateTime?, string?) claude, (Usage?, DateTime?, string?) cx,
-        List<DevServer>? servers = null)
+        List<DevServer>? servers = null, LookOptions? options = null)
     {
         Content = null;
         this.servers = servers ?? []; // never the real ones, so the files don't change with what runs on this PC
@@ -305,6 +307,7 @@ class PrototypeWindow : Window
         current = look;
         settings.Scale = 1; // never saved: QA doesn't touch the settings file
         settings.Compact = compact;
+        qaOptions = options ?? LookOptions.Default(look, compact);
         (last, lastOk, error) = claude;
         (codexLast, codexOk, codexError) = cx;
         Render();
@@ -314,7 +317,7 @@ class PrototypeWindow : Window
     internal ContextMenu QaMenu() => BuildMenu();
 
     /// QA only: the hover card of source `index` in the card QaCard last drew.
-    internal ToolTip QaTip(int index) => (ToolTip)Tip(new Border(), Sources().ElementAt(index), mini: current == 9).ToolTip;
+    internal ToolTip QaTip(int index) => (ToolTip)Tip(new Border(), Sources().ElementAt(index)).ToolTip;
 
     internal ToolTip QaServerTip(DevServer server) => ServerCard(server);
 
@@ -373,18 +376,18 @@ class PrototypeWindow : Window
     /// so a Close button isn't rebuilt under the mouse every second.
     void BuildServers()
     {
-        var halo = current == 9;
-        var key = $"{halo}{settings.Compact}|" + string.Join(",", servers.Select(s => $"{s.Pid}:{s.Port}"));
+        var halo = narrow;
+        var key = $"{halo}|" + string.Join(",", servers.Select(s => $"{s.Pid}:{s.Port}"));
         if (key == serversKey) return;
         serversKey = key;
 
         serversPanel.Children.Clear();
         if (servers.Count == 0) return;
-        serversPanel.Children.Add(new Border { Height = 1, Background = Theme.Divider, Margin = new Thickness(0, Gap(8, 5), 0, Gap(6, 3)) });
+        serversPanel.Children.Add(new Border { Height = 1, Background = Theme.Divider, Margin = new Thickness(0, 5, 0, 3) });
         foreach (var server in servers)
         {
-            // Halo is too narrow for the full row: just :port and ×, the project is in the hover card.
-            var row = new DockPanel { Height = halo ? Gap(18, 16) : Gap(20, 17), Background = Brushes.Transparent };
+            // A narrow look has no room for the full row: just :port and ×, the project is in the hover card.
+            var row = new DockPanel { Height = halo ? 16 : 17, Background = Brushes.Transparent };
             var close = halo
                 ? new Button { Style = (Style)FindResource("ServerX"), Margin = new Thickness(6, 0, 0, 0) }
                 : new Button { Style = (Style)FindResource("ServerClose"), Content = "Close", Margin = new Thickness(8, 0, 0, 0) };
@@ -492,17 +495,16 @@ class PrototypeWindow : Window
         return menu;
     }
 
-    // Each source (Claude, then Codex) is one block with the same parts in every look: its logo (only when Codex is
-    // shown), Session and Weekly, the time to the Session Reset, and a status line: the Update time, or why the
-    // numbers are Stale. Blocks have fixed widths, so the card doesn't jump when a state changes.
+    // Each source (Claude, then Codex) is one block. A look draws the block from the source and the parts the current
+    // set shows (LookOptions); the blocks sit stacked or side by side. Spacing is the same in every look and set.
     record Source(string Icon, Usage? U, DateTime? Ok, string? Err)
     {
         public bool Stale => Err != null;
         public string Name => Icon == "claude" ? "Claude" : "Codex";
     }
 
-    /// A space in the normal look, or the smaller one when Compact.
-    double Gap(double normal, double compact) => settings.Compact ? compact : normal;
+    /// One limit as a look shows it: its name, its %, and the share of its Window gone by (null until it has started).
+    record Limit(string Name, double? Pct, double? Gone);
 
     IEnumerable<Source> Sources()
     {
@@ -510,44 +512,411 @@ class PrototypeWindow : Window
         if (ShowCodex) yield return new("codex", codexLast, codexOk, codexError);
     }
 
-    /// Blocks side by side, a divider between them (Rings, Strip).
-    UIElement SideBySide(Func<Source, FrameworkElement> block)
+    /// The parts the current look shows: its Full or Compact set (QA: the set it was handed).
+    LookOptions Options => qaOptions ?? settings.Options(current);
+    LookOptions? qaOptions;
+
+    /// The limits the set shows: both, the 5h one, or whichever is higher now.
+    static List<Limit> LimitsOf(Source src, LookOptions o)
     {
-        var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
+        var now = DateTimeOffset.Now;
+        double? Gone(DateTimeOffset? reset, TimeSpan window) => reset is { } at ? Math.Clamp(1 - (at - now) / window, 0, 1) : null;
+        var session = new Limit("5h", src.U?.SessionPct, Gone(src.U?.SessionReset, TimeSpan.FromHours(5)));
+        var weekly = new Limit("7d", src.U?.WeeklyPct, Gone(src.U?.WeeklyReset, TimeSpan.FromDays(7)));
+        return o.Limits switch
+        {
+            Limits.Session => [session],
+            Limits.Higher => [weekly.Pct > session.Pct ? weekly : session],
+            _ => [session, weekly],
+        };
+    }
+
+    /// The blocks stacked or side by side, a divider between them, and one "Updated" line if the set shows it.
+    UIElement Arranged(Func<Source, LookOptions, FrameworkElement> block, LookOptions o)
+    {
+        var side = o.Arrange == Arrangement.SideBySide;
+        var row = new StackPanel { Orientation = side ? Orientation.Horizontal : Orientation.Vertical };
         foreach (var src in Sources())
         {
             if (row.Children.Count > 0)
-                row.Children.Add(new Border { Width = 1, Background = Theme.Divider, Margin = new Thickness(Gap(14, 8), 2, Gap(14, 8), 2) });
-            row.Children.Add(Tip(block(src), src));
+                row.Children.Add(side
+                    ? new Border { Width = 1, Background = Theme.Divider, Margin = new Thickness(8, 2, 8, 2) }
+                    : new Border { Height = 1, Background = Theme.Divider, Margin = new Thickness(0, 4, 0, 4) });
+            row.Children.Add(Tip(block(src, o), src));
         }
+        if (!o.Updated) return row;
+        // Both sources update together, so one line for the widget.
+        var all = new StackPanel();
+        all.Children.Add(row);
+        var at = Sources().Where(s => !s.Stale).Max(s => s.Ok);
+        all.Children.Add(Label(at is { } t ? $"Updated {t:HH:mm}" : "Updating…", 11, Dim, HorizontalAlignment.Right, top: 2));
+        return all;
+    }
+
+    // Bars: per limit a row of name · % · bar, the reset and the status on the right. Was Pill, Pace, Meter and Mini.
+    FrameworkElement BarsBlock(Source src, LookOptions o)
+    {
+        var lims = LimitsOf(src, o);
+        var one = lims.Count == 1;
+        var block = new DockPanel { Background = Brushes.Transparent };
+        if (o.Logo) Dock(block, LogoColumn(src, one ? 18 : 20, one ? 13 : 15));
+        var rows = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        foreach (var l in lims)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Height = 16 };
+            if (o.Labels) row.Children.Add(Fixed(Label(l.Name, 12, Dim, HorizontalAlignment.Left), 16));
+            if (o.Pct)
+            {
+                var pct = Fixed(Label(Pct(l.Pct), one ? 13 : 14, NumberColor(src), HorizontalAlignment.Left, bold: true, right: 5), one ? 32 : 34);
+                pct.TextAlignment = TextAlignment.Right;
+                row.Children.Add(pct);
+            }
+            row.Children.Add(o.BarStyle == BarStyle.Blocks ? Blocks(l.Pct, src.Stale)
+                : PaceBar(l, o.BarLength == BarLength.Long ? 72 : 44, one ? 3 : 4, src.Stale, o.Tick));
+            if (o.PaceWords)
+            {
+                // No verdict on old numbers, or before the Window has started.
+                var fast = l.Pct - l.Gone * 100 > 5;
+                var words = src.Stale || l.Pct == null || l.Gone == null ? "" : fast ? "fast" : "on pace";
+                row.Children.Add(Fixed(Label(words, 11, fast && !src.Stale ? Amber : Dim, HorizontalAlignment.Left, left: 8), 44));
+            }
+            rows.Children.Add(row);
+        }
+        Dock(block, rows);
+
+        var status = StatusPart(src, o);
+        if (one)
+        {
+            // One row: the reset and the ⚠ in line after the bar.
+            var line = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 0, 0, 0), HorizontalAlignment = HorizontalAlignment.Right };
+            if (ResetPart(src, o) is { } r) line.Children.Add(r);
+            if (status != null) { status.Margin = new Thickness(line.Children.Count > 0 ? 6 : 0, 0, 0, 0); line.Children.Add(status); }
+            block.Children.Add(line);
+        }
+        else if (o.Rotate)
+        {
+            var side = new StackPanel { Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
+            if (Rotated(src, o) is { } r) { r.HorizontalAlignment = HorizontalAlignment.Right; side.Children.Add(r); }
+            if (status != null) { status.HorizontalAlignment = HorizontalAlignment.Right; side.Children.Add(status); }
+            block.Children.Add(side);
+        }
+        else
+        {
+            // Two rows: the reset beside the first and the status beside the second; one alone sits in the middle.
+            var side = new Grid { Margin = new Thickness(8, 0, 0, 0), HorizontalAlignment = HorizontalAlignment.Right };
+            side.RowDefinitions.Add(new RowDefinition { Height = new GridLength(16) });
+            side.RowDefinitions.Add(new RowDefinition { Height = new GridLength(16) });
+            var parts = new[] { ResetPart(src, o), status }.OfType<FrameworkElement>().ToArray();
+            for (var i = 0; i < parts.Length; i++)
+            {
+                parts[i].HorizontalAlignment = HorizontalAlignment.Right;
+                parts[i].VerticalAlignment = VerticalAlignment.Center;
+                Grid.SetRow(parts[i], i);
+                if (parts.Length == 1) Grid.SetRowSpan(parts[i], 2);
+                side.Children.Add(parts[i]);
+            }
+            block.Children.Add(side);
+        }
+        return block;
+    }
+
+    /// A bar with, if asked, a white tick where an even spread of the use until the Reset would be. Past it: too fast.
+    FrameworkElement PaceBar(Limit l, double w, double h, bool stale, bool tick)
+    {
+        var bar = Bar(l.Pct, w, h, horizontal: true, stale);
+        if (!tick || l.Gone is not { } t) return bar;
+        var grid = new Grid { Width = w, VerticalAlignment = VerticalAlignment.Center };
+        grid.Children.Add(bar);
+        grid.Children.Add(new Border
+        {
+            Width = 2, Height = h + 6, Background = stale ? Theme.StaleText : Text, Opacity = 0.9, CornerRadius = new CornerRadius(1),
+            HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(Math.Clamp(w * t - 1, 0, w - 2), 0, 0, 0),
+        });
+        return grid;
+    }
+
+    /// Ten LED blocks. The last three are always amber and red, lit or not, so the edge shows.
+    static FrameworkElement Blocks(double? pct, bool stale)
+    {
+        var lit = pct is { } p && p > 0 ? Math.Clamp((int)Math.Round(p / 10, MidpointRounding.AwayFromZero), 1, 10) : 0;
+        var blocks = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        for (var i = 0; i < 10; i++)
+            blocks.Children.Add(new Border
+            {
+                Width = 6, Height = 9, CornerRadius = new CornerRadius(2), Margin = new Thickness(0, 0, i < 9 ? 2 : 0, 0),
+                // The last lit block takes the value's own colour, so 91% shows red even before block 10 lights.
+                Background = i < lit
+                    ? stale ? Theme.StaleFill : i == lit - 1 && pct >= 75 ? ColorFor(pct!.Value, false) : i < 7 ? Normal : i < 9 ? Amber : Red
+                    : i < 7 ? Theme.MeterOff : i < 9 ? Theme.MeterOffAmber : Theme.MeterOffRed,
+            });
+        return blocks;
+    }
+
+    // Rings: a ring per limit with its % and name inside; the logo and the reset centred under them.
+    FrameworkElement RingsBlock(Source src, LookOptions o)
+    {
+        // A little bigger when it holds both the % and the name.
+        double d = o.Labels && o.Pct ? 44 : 40;
+        var rings = new StackPanel { Orientation = Orientation.Horizontal };
+        foreach (var l in LimitsOf(src, o))
+        {
+            var ring = new Grid { Width = d, Height = d, Margin = new Thickness(rings.Children.Count > 0 ? 6 : 0, 0, 0, 0) };
+            RingArc(ring, l.Pct, d, 4, src.Stale);
+            var inside = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+            if (o.Pct) inside.Children.Add(Tight(Label(Pct(l.Pct), 12, NumberColor(src), HorizontalAlignment.Center, bold: true), 13));
+            if (o.Labels) inside.Children.Add(Tight(Label(l.Name, 9, Dim, HorizontalAlignment.Center), 9));
+            ring.Children.Add(inside);
+            rings.Children.Add(ring);
+        }
+        return WithFooter(src, o, rings);
+    }
+
+    // Target: one double ring per source (the first limit outside) around its logo, like the tray icon; the numbers
+    // to the right and the reset on its side to the left. Was Target and Halo.
+    FrameworkElement TargetBlock(Source src, LookOptions o)
+    {
+        var lims = LimitsOf(src, o);
+        double d = o.Pct || o.Reset != ResetShow.Off ? 44 : 34, stroke = d > 40 ? 4.5 : 3.5;
+        var ring = new Grid { Width = d, Height = d, Background = Brushes.Transparent };
+        RingArc(ring, lims[0].Pct, d - 1, stroke, src.Stale);
+        if (lims.Count > 1) RingArc(ring, lims[1].Pct, d - 2 * stroke - 4, stroke, src.Stale);
+        if (o.Logo)
+        {
+            var logo = SourceLogo(src, d > 40 ? 14 : 12);
+            logo.HorizontalAlignment = HorizontalAlignment.Center;
+            ring.Children.Add(logo);
+        }
+        // With the icon alone there is no line for it: a small badge on the ring says the numbers are old.
+        var badge = src.Err != null && o.Stale == StaleShow.Icon;
+        if (badge) ring.Children.Add(Badge(src.Err!));
+
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        var reset = Rotated(src, o);
+        double gap = reset != null ? 4 : 8;
+        if (reset != null) { row.Children.Add(reset); ring.Margin = new Thickness(gap, 0, 0, 0); }
+        row.Children.Add(ring);
+        if (o.Pct)
+        {
+            var nums = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(gap, 0, 0, 0) };
+            foreach (var l in lims)
+            {
+                var line = new StackPanel { Orientation = Orientation.Horizontal, Height = 19 };
+                if (o.Labels) line.Children.Add(Fixed(Label(l.Name, 11, Dim, HorizontalAlignment.Left, right: 6), 22));
+                line.Children.Add(Label(Pct(l.Pct), 14, NumberColor(src), HorizontalAlignment.Left, bold: true));
+                nums.Children.Add(line);
+            }
+            row.Children.Add(nums);
+        }
+        var col = new StackPanel { Background = Brushes.Transparent };
+        col.Children.Add(row);
+        if (!badge && StatusPart(src, o) is { } status) { status.Margin = new Thickness(0, 2, 0, 0); col.Children.Add(status); }
+        return col;
+    }
+
+    static FrameworkElement Badge(string err)
+    {
+        var badge = new Grid { Width = 13, Height = 13, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, -3, -3) };
+        badge.Children.Add(new Ellipse { Fill = Theme.CardBg });
+        var warn = Glyph(Theme.WarningGlyph, 8, NeedsAction(err) ? Theme.Critical : Theme.Tertiary);
+        warn.HorizontalAlignment = HorizontalAlignment.Center;
+        warn.Margin = new Thickness(0, 0, 0, 1);
+        badge.Children.Add(warn);
+        return badge;
+    }
+
+    // Gauge: a half dial per source (the first limit outside), the first % big in the middle and the second under it.
+    FrameworkElement GaugeBlock(Source src, LookOptions o)
+    {
+        var lims = LimitsOf(src, o);
+        var two = lims.Count > 1;
+        // Drawn in a 100-wide box and shown 84 wide.
+        var dial = new Canvas { Width = 100, Height = o.Pct && (two || o.Labels) ? 66 : 56, LayoutTransform = new ScaleTransform(0.84, 0.84) };
+        for (var i = 0; i < lims.Count; i++)
+        {
+            double r = !two ? 40 : i == 0 ? 42 : 32;
+            dial.Children.Add(HalfArc(50, 52, r, 100, 6, Track));
+            if (lims[i].Pct is { } p && p > 0) dial.Children.Add(HalfArc(50, 52, r, p, 6, ColorFor(p, src.Stale)));
+        }
+        if (o.Pct)
+        {
+            TextAt(dial, Pct(lims[0].Pct), 18, true, NumberColor(src), two ? 45 : 50);
+            var small = two ? $"{(o.Labels ? lims[1].Name + " " : "")}{Pct(lims[1].Pct)}" : o.Labels ? lims[0].Name : "";
+            if (small != "") TextAt(dial, small, 13, false, Dim, 63);
+        }
+        if (!o.Rotate) return WithFooter(src, o, dial, icon: false);
+        // Rotated: the reset stands left of the dial, as in Target, and the footer keeps only the logo.
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        if (Rotated(src, o) is { } reset) { row.Children.Add(reset); dial.Margin = new Thickness(4, 0, 0, 0); }
+        row.Children.Add(dial);
+        return WithFooter(src, o, row, icon: false, reset: false);
+    }
+
+    /// Text centred in the dial's box with its baseline at `baseline`, like SVG text.
+    static void TextAt(Canvas canvas, string text, double size, bool bold, Brush color, double baseline)
+    {
+        var label = Label(text, size, color, HorizontalAlignment.Left, bold: bold);
+        var ft = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+            new Typeface(Theme.Font, FontStyles.Normal, label.FontWeight, FontStretches.Normal), size, color, 1);
+        Canvas.SetLeft(label, (canvas.Width - ft.WidthIncludingTrailingWhitespace) / 2);
+        Canvas.SetTop(label, baseline - ft.Baseline);
+        canvas.Children.Add(label);
+    }
+
+    /// Rings and Gauge: the logo and the reset on one centred line under `top`. A lone ⚠ joins that line; a reason
+    /// goes on a line of its own.
+    FrameworkElement WithFooter(Source src, LookOptions o, FrameworkElement top, bool icon = true, bool reset = true)
+    {
+        var col = new StackPanel { Background = Brushes.Transparent };
+        top.HorizontalAlignment = HorizontalAlignment.Center;
+        col.Children.Add(top);
+        var status = StatusPart(src, o);
+        var inFoot = status != null && o.Stale == StaleShow.Icon;
+        var foot = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 3, 0, 0) };
+        void Add(FrameworkElement el)
+        {
+            if (foot.Children.Count > 0) el.Margin = new Thickness(5, 0, 0, 0);
+            foot.Children.Add(el);
+        }
+        if (o.Logo) Add(SourceLogo(src, 13));
+        if (reset && ResetPart(src, o, icon) is { } r) Add(r);
+        if (inFoot) Add(status!);
+        if (foot.Children.Count > 0) col.Children.Add(foot);
+        if (status != null && !inFoot) col.Children.Add(Centered(status, top: 2));
+        return col;
+    }
+
+    // Strip: a filling column per limit, the % on top and the name under; the logo above, the reset and status below.
+    FrameworkElement StripBlock(Source src, LookOptions o)
+    {
+        var col = new StackPanel { Background = Brushes.Transparent };
+        if (o.Logo) col.Children.Add(Centered(SourceLogo(src, 14), bottom: 3));
+        var bars = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
+        foreach (var l in LimitsOf(src, o))
+        {
+            var c = new StackPanel { Width = 34 };
+            if (o.Pct) c.Children.Add(Label(Pct(l.Pct), 13, NumberColor(src), HorizontalAlignment.Center, bold: true, bottom: 3));
+            c.Children.Add(Centered(Bar(l.Pct, 8, 52, horizontal: false, src.Stale)));
+            if (o.Labels) c.Children.Add(Label(l.Name, 11, Dim, HorizontalAlignment.Center, top: 2));
+            bars.Children.Add(c);
+        }
+        col.Children.Add(bars);
+        var resetPart = ResetPart(src, o);
+        if (resetPart != null) col.Children.Add(Centered(resetPart, top: 4));
+        if (StatusPart(src, o) is { } status) col.Children.Add(Centered(status, top: resetPart != null ? 0 : 4));
+        return col;
+    }
+
+    // Numbers: just the %, big, amber and red once high, a hairline bar under each; the reset and status to the right.
+    FrameworkElement NumbersBlock(Source src, LookOptions o)
+    {
+        var block = new DockPanel { Background = Brushes.Transparent };
+        if (o.Logo) Dock(block, LogoColumn(src, 20, 15));
+        foreach (var l in LimitsOf(src, o))
+        {
+            var big = new TextBlock
+            {
+                FontFamily = Theme.Font, FontWeight = FontWeights.SemiBold, LineHeight = 22, LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
+                Foreground = src.Stale ? Theme.StaleText : l.Pct >= 90 ? Red : l.Pct >= 75 ? Amber : Text,
+            };
+            big.Inlines.Add(new System.Windows.Documents.Run(l.Pct is { } p ? $"{p:0}" : "—") { FontSize = 20 });
+            if (l.Pct != null) big.Inlines.Add(new System.Windows.Documents.Run("%") { FontSize = 12 });
+            var num = new StackPanel { Width = 42, Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center };
+            num.Children.Add(big);
+            if (o.Hairline)
+            {
+                var line = Bar(l.Pct, 38, 2, horizontal: true, src.Stale);
+                line.HorizontalAlignment = HorizontalAlignment.Left;
+                line.Margin = new Thickness(0, 1, 0, 1);
+                num.Children.Add(line);
+            }
+            if (o.Labels) num.Children.Add(Tight(Label(l.Name, 11, Dim, HorizontalAlignment.Left), 13));
+            Dock(block, num);
+        }
+        // The last child fills the rest of the row, so it sits at the right. A plain reset and the status share one
+        // line, so a one-row block stays one row; a rotated reset has the status under it.
+        var inline = !o.Rotate;
+        var side = new StackPanel
+        {
+            Orientation = inline ? Orientation.Horizontal : Orientation.Vertical, Margin = new Thickness(4, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right,
+        };
+        if ((o.Rotate ? Rotated(src, o) : ResetPart(src, o)) is { } r) { r.HorizontalAlignment = HorizontalAlignment.Right; side.Children.Add(r); }
+        if (StatusPart(src, o) is { } status)
+        {
+            status.HorizontalAlignment = HorizontalAlignment.Right;
+            var gap = side.Children.Count > 0;
+            status.Margin = inline ? new Thickness(gap ? 6 : 0, 0, 0, 0) : new Thickness(0, gap ? 1 : 0, 0, 0);
+            side.Children.Add(status);
+        }
+        block.Children.Add(side);
+        return block;
+    }
+
+    static void Dock(DockPanel panel, UIElement el)
+    {
+        DockPanel.SetDock(el, System.Windows.Controls.Dock.Left);
+        panel.Children.Add(el);
+    }
+
+    /// The logo at the left of a row look, in a column of its own so the rows line up.
+    static FrameworkElement LogoColumn(Source src, double width, double size)
+    {
+        var logo = SourceLogo(src, size);
+        logo.HorizontalAlignment = HorizontalAlignment.Left;
+        return new Border { Width = width, Child = logo, VerticalAlignment = VerticalAlignment.Center };
+    }
+
+    /// The time to the Session Reset, or its clock time; null when the set hides it. It stays true while the numbers
+    /// are Stale, so it is only dimmed. `icon`: the ↻ in front.
+    static FrameworkElement? ResetPart(Source src, LookOptions o, bool icon = true)
+    {
+        if (o.Reset == ResetShow.Off || src.U == null) return null;
+        var color = src.Stale ? Theme.StaleText : Theme.Secondary;
+        var text = Label(ResetText(src.U, o), 12, color, HorizontalAlignment.Left);
+        if (!icon) return text;
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        row.Children.Add(Glyph(Theme.ResetGlyph, 10, color, right: 4));
+        row.Children.Add(text);
         return row;
     }
 
-    // A: two ring gauges per source.
-    UIElement Rings() => SideBySide(src =>
+    /// The reset time on its side, read bottom to top, with no ↻ so it fits the height beside it.
+    static FrameworkElement? Rotated(Source src, LookOptions o)
     {
-        var col = new StackPanel { Width = Gap(104, 94) };
-        if (ShowCodex) col.Children.Add(Centered(SourceLogo(src, 14), bottom: Gap(8, 5)));
-        var rings = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
-        rings.Children.Add(Ring(src.U?.SessionPct, "5h", src.Stale));
-        rings.Children.Add(new Border { Width = Gap(12, 6) });
-        rings.Children.Add(Ring(src.U?.WeeklyPct, "7d", src.Stale));
-        col.Children.Add(rings);
-        col.Children.Add(Centered(ResetIn(src), top: Gap(8, 4)));
-        col.Children.Add(Centered(Status(src), top: Gap(2, 0)));
-        return col;
-    });
+        if (o.Reset == ResetShow.Off || src.U == null) return null;
+        var text = Tight(Label(ResetText(src.U, o), 11, src.Stale ? Theme.StaleText : Theme.Secondary, HorizontalAlignment.Center), 11);
+        text.LayoutTransform = new RotateTransform(-90);
+        return text;
+    }
 
-    UIElement Ring(double? pct, string name, bool stale, double size = 44)
+    static string ResetText(Usage u, LookOptions o) =>
+        o.Reset == ResetShow.ClockTime && u.SessionReset is { } at ? at.ToLocalTime().ToString("HH:mm") : Countdown(u.SessionReset);
+
+    /// Only while Stale: the ⚠, and its short reason unless the set shows the icon alone. The full reason is in the hover card.
+    static FrameworkElement? StatusPart(Source src, LookOptions o)
     {
-        var grid = new Grid { Width = size, Height = size };
-        RingArc(grid, pct, size, 4, stale);
-        grid.Children.Add(Label(Pct(pct), 12, stale ? Theme.StaleText : Text, HorizontalAlignment.Center, bold: true));
+        if (src.Err is not { } err) return null;
+        var color = NeedsAction(err) ? Theme.Critical : Theme.Tertiary;
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        row.Children.Add(Glyph(Theme.WarningGlyph, 10, color));
+        if (o.Stale == StaleShow.Reason) row.Children.Add(Label(Short(err), 11, color, HorizontalAlignment.Left, left: 4));
+        return row;
+    }
 
-        var stack = new StackPanel();
-        stack.Children.Add(grid);
-        stack.Children.Add(Label(name, 11, Dim, HorizontalAlignment.Center, top: Gap(4, 1.5)));
-        return stack;
+    static Brush NumberColor(Source src) => src.Stale ? Theme.StaleText : Text;
+
+    static T Fixed<T>(T el, double width) where T : FrameworkElement
+    {
+        el.Width = width;
+        return el;
+    }
+
+    /// A line exactly `height` tall, so small text sits as close as it does on the proposal page.
+    static TextBlock Tight(TextBlock text, double height)
+    {
+        text.LineHeight = height;
+        text.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+        return text;
     }
 
     /// A ring of outer diameter `d`, centred in `grid`, filled clockwise from the top. A round cap juts out half the
@@ -580,69 +949,6 @@ class PrototypeWindow : Window
         });
     }
 
-    // B: per source, two rows of name · % · bar, with the Reset and the status on the right.
-    UIElement Pill() => Stacked(src =>
-    {
-        var grid = Rows(src, ShowCodex ? Gap(28, 22) : 0, Gap(22, 20), Gap(46, 40), Gap(100, 80), 84);
-        foreach (var (row, name, pct) in new[] { (0, "5h", src.U?.SessionPct), (1, "7d", src.U?.WeeklyPct) })
-        {
-            Put(grid, Label(name, 12, Dim, HorizontalAlignment.Left), row, 1);
-            Put(grid, Label(Pct(pct), 14, src.Stale ? Theme.StaleText : Text, HorizontalAlignment.Right, bold: true, right: Gap(10, 6)), row, 2);
-            Put(grid, Bar(pct, Gap(88, 72), 4, horizontal: true, src.Stale), row, 3);
-        }
-        ResetAndStatus(grid, src, 4);
-        return grid;
-    });
-
-    // C: per source, two filling columns like batteries.
-    UIElement Strip() => SideBySide(src =>
-    {
-        var col = new StackPanel { Width = Gap(88, 82) };
-        if (ShowCodex) col.Children.Add(Centered(SourceLogo(src, 14), bottom: Gap(8, 2)));
-        var bars = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
-        foreach (var (name, pct) in new[] { ("5h", src.U?.SessionPct), ("7d", src.U?.WeeklyPct) })
-        {
-            var c = new StackPanel { Width = Gap(38, 37) };
-            c.Children.Add(Label(Pct(pct), 13, src.Stale ? Theme.StaleText : Text, HorizontalAlignment.Center, bold: true, bottom: 4));
-            c.Children.Add(Centered(Bar(pct, 8, 64, horizontal: false, src.Stale)));
-            c.Children.Add(Label(name, 11, Dim, HorizontalAlignment.Center, top: Gap(4, 2)));
-            bars.Children.Add(c);
-        }
-        col.Children.Add(bars);
-        col.Children.Add(Centered(ResetIn(src), top: Gap(8, 4)));
-        col.Children.Add(Centered(Status(src), top: Gap(2, 0)));
-        return col;
-    });
-
-    // D: a half dial per source, 5h on the outside and 7d inside, the 5h % big in the middle.
-    UIElement Gauge() => SideBySide(src =>
-    {
-        var col = new StackPanel { Width = Gap(104, 96) };
-        if (ShowCodex) col.Children.Add(Centered(SourceLogo(src, 14), bottom: Gap(6, 3)));
-        const double w = 100, h = 58, stroke = 6, cy = 52;
-        var dial = new Grid { Width = w, Height = h, HorizontalAlignment = HorizontalAlignment.Center };
-        foreach (var (r, pct) in new[] { (42.0, src.U?.SessionPct), (32.0, src.U?.WeeklyPct) })
-        {
-            dial.Children.Add(HalfArc(w / 2, cy, r, 100, stroke, Track));
-            if (pct is { } p && p > 0) dial.Children.Add(HalfArc(w / 2, cy, r, p, stroke, ColorFor(p, src.Stale)));
-        }
-        dial.Children.Add(new TextBlock
-        {
-            Text = Pct(src.U?.SessionPct), FontSize = 17, FontWeight = FontWeights.SemiBold, FontFamily = Theme.Font,
-            Foreground = src.Stale ? Theme.StaleText : Text, HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 24, 0, 0),
-        });
-        dial.Children.Add(new TextBlock
-        {
-            Text = $"7d {Pct(src.U?.WeeklyPct)}", FontSize = 10, FontFamily = Theme.Font, Foreground = Dim,
-            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 44, 0, 0),
-        });
-        col.Children.Add(dial);
-        col.Children.Add(Centered(ResetIn(src), top: Gap(6, 3)));
-        col.Children.Add(Centered(Status(src), top: Gap(2, 0)));
-        return col;
-    });
-
     /// A half dial's arc, from 9 o'clock over the top, `pct` of the way to 3 o'clock.
     static Path HalfArc(double cx, double cy, double r, double pct, double stroke, Brush color)
     {
@@ -656,271 +962,11 @@ class PrototypeWindow : Window
         };
     }
 
-    // E: per source, ten LED blocks per limit. The last three are always amber and red, lit or not, so the edge shows.
-    UIElement Meter() => Stacked(src =>
+    /// Hover a source for a card with both limits, both Resets, and why and since when it is Stale, whatever the look
+    /// hides. It opens above the source, since the widget sits on the taskbar.
+    FrameworkElement Tip(FrameworkElement el, Source src)
     {
-        var grid = Rows(src, ShowCodex ? Gap(26, 22) : 0, Gap(22, 20), Gap(46, 40), Gap(96, 92), 84);
-        foreach (var (row, name, pct) in new[] { (0, "5h", src.U?.SessionPct), (1, "7d", src.U?.WeeklyPct) })
-        {
-            Put(grid, Label(name, 12, Dim, HorizontalAlignment.Left), row, 1);
-            Put(grid, Label(Pct(pct), 14, src.Stale ? Theme.StaleText : Text, HorizontalAlignment.Right, bold: true, right: Gap(8, 6)), row, 2);
-            var lit = pct is { } p && p > 0 ? Math.Clamp((int)Math.Round(p / 10, MidpointRounding.AwayFromZero), 1, 10) : 0;
-            var blocks = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            for (var i = 0; i < 10; i++)
-                blocks.Children.Add(new Border
-                {
-                    Width = 7, Height = 10, CornerRadius = new CornerRadius(2), Margin = new Thickness(0, 0, i < 9 ? 2 : 0, 0),
-                    // The last lit block takes the value's own colour, so 91% shows red even before block 10 lights.
-                    Background = i < lit
-                        ? src.Stale ? Theme.StaleFill : i == lit - 1 && pct >= 75 ? ColorFor(pct.Value, false) : i < 7 ? Normal : i < 9 ? Amber : Red
-                        : i < 7 ? Theme.MeterOff : i < 9 ? Theme.MeterOffAmber : Theme.MeterOffRed,
-                });
-            Put(grid, blocks, row, 3);
-        }
-        ResetAndStatus(grid, src, 4);
-        return grid;
-    });
-
-    // F: per source, one double ring around its logo (5h outside, 7d inside), like the tray icon; numbers beside it.
-    UIElement Target() => SideBySide(src =>
-    {
-        var col = new StackPanel { Width = Gap(118, 108) };
-        var top = new StackPanel { Orientation = Orientation.Horizontal };
-        var ring = new Grid { Width = 52, Height = 52 };
-        RingArc(ring, src.U?.SessionPct, 52, 5, src.Stale);
-        RingArc(ring, src.U?.WeeklyPct, 36, 5, src.Stale);
-        var logo = SourceLogo(src, 14);
-        logo.HorizontalAlignment = HorizontalAlignment.Center;
-        ring.Children.Add(logo);
-        top.Children.Add(ring);
-        var nums = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(Gap(10, 8), 0, 0, 0) };
-        foreach (var (name, pct) in new[] { ("5h", src.U?.SessionPct), ("7d", src.U?.WeeklyPct) })
-        {
-            var line = new StackPanel { Orientation = Orientation.Horizontal, Height = 20 };
-            var label = Label(name, 11, Dim, HorizontalAlignment.Left);
-            label.Width = 18;
-            line.Children.Add(label);
-            line.Children.Add(Label(Pct(pct), 14, src.Stale ? Theme.StaleText : Text, HorizontalAlignment.Left, bold: true, left: 4));
-            nums.Children.Add(line);
-        }
-        top.Children.Add(nums);
-        col.Children.Add(top);
-        var reset = ResetIn(src);
-        reset.Margin = new Thickness(0, Gap(6, 3), 0, 0);
-        col.Children.Add(reset);
-        var status = Status(src);
-        status.Margin = new Thickness(0, Gap(2, 0), 0, 0);
-        col.Children.Add(status);
-        return col;
-    });
-
-    // G: per source, just the two numbers, big; amber and red once they get high. A hairline under each shows the fill.
-    UIElement Numbers() => Stacked(src =>
-    {
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Background = Brushes.Transparent };
-        if (ShowCodex)
-        {
-            var logo = SourceLogo(src, 16);
-            logo.HorizontalAlignment = HorizontalAlignment.Left;
-            row.Children.Add(new Border { Width = Gap(26, 22), Child = logo });
-        }
-        foreach (var (name, pct) in new[] { ("5h", src.U?.SessionPct), ("7d", src.U?.WeeklyPct) })
-        {
-            var color = src.Stale ? Theme.StaleText : pct >= 90 ? Red : pct >= 75 ? Amber : Text;
-            var big = new TextBlock { FontFamily = Theme.Font, FontWeight = FontWeights.SemiBold, Foreground = color };
-            big.Inlines.Add(new System.Windows.Documents.Run(pct is { } p ? $"{p:0}" : "—") { FontSize = 24 });
-            if (pct != null) big.Inlines.Add(new System.Windows.Documents.Run("%") { FontSize = 14 });
-            var num = new StackPanel { Width = Gap(62, 56) };
-            num.Children.Add(big);
-            var line = Bar(pct, 52, 2, horizontal: true, src.Stale);
-            line.HorizontalAlignment = HorizontalAlignment.Left;
-            line.Margin = new Thickness(0, Gap(2, 1), 0, Gap(3, 1));
-            num.Children.Add(line);
-            num.Children.Add(Label(name, 11, Dim, HorizontalAlignment.Left));
-            row.Children.Add(num);
-        }
-        var right = new StackPanel { Width = 84, VerticalAlignment = VerticalAlignment.Center };
-        var reset = ResetIn(src);
-        reset.HorizontalAlignment = HorizontalAlignment.Right;
-        right.Children.Add(reset);
-        var status = Status(src);
-        status.HorizontalAlignment = HorizontalAlignment.Right;
-        status.Margin = new Thickness(0, Gap(6, 3), 0, 0);
-        right.Children.Add(status);
-        row.Children.Add(right);
-        return row;
-    }, Gap(10, 6));
-
-    // H: one thin line per source: two hairline bars (5h on top), the higher %, the time to Reset. The rest is in the tooltip.
-    UIElement Mini() => Stacked(src =>
-    {
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Height = 18, Background = Brushes.Transparent };
-        if (ShowCodex)
-        {
-            var logo = SourceLogo(src, 12);
-            logo.Margin = new Thickness(0, 0, 8, 0);
-            row.Children.Add(logo);
-        }
-        var bars = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        bars.Children.Add(Bar(src.U?.SessionPct, 56, 3, horizontal: true, src.Stale));
-        var weekly = Bar(src.U?.WeeklyPct, 56, 3, horizontal: true, src.Stale);
-        weekly.Margin = new Thickness(0, 2, 0, 0);
-        bars.Children.Add(weekly);
-        row.Children.Add(bars);
-        var hi = Label(Pct(Max(src.U)), 12, src.Stale ? Theme.StaleText : Text, HorizontalAlignment.Left, bold: true);
-        hi.Width = 34;
-        hi.TextAlignment = TextAlignment.Right;
-        row.Children.Add(hi);
-        row.Children.Add(Label(src.U == null ? "" : Countdown(src.U.SessionReset), 11, src.Stale ? Theme.StaleText : Theme.Secondary,
-            HorizontalAlignment.Left, left: 8));
-        if (src.Err is { } err)
-        {
-            var warn = Glyph(Theme.WarningGlyph, 10, NeedsAction(err) ? Theme.Critical : Theme.Tertiary);
-            warn.Margin = new Thickness(6, 1, 0, 0);
-            row.Children.Add(warn);
-        }
-        return row;
-    }, Gap(6, 4));
-
-    // I: the Pill's bars plus a white tick where an even spread of the use until the Reset would be. Past it: too fast.
-    UIElement Pace() => Stacked(src =>
-    {
-        var grid = Rows(src, ShowCodex ? Gap(28, 22) : 0, Gap(22, 20), Gap(46, 40), Gap(100, 80), Gap(60, 54), 100);
-        var now = DateTimeOffset.Now;
-        foreach (var (row, name, pct, reset, window) in new[]
-        {
-            (0, "5h", src.U?.SessionPct, src.U?.SessionReset, TimeSpan.FromHours(5)),
-            (1, "7d", src.U?.WeeklyPct, src.U?.WeeklyReset, TimeSpan.FromDays(7)),
-        })
-        {
-            Put(grid, Label(name, 12, Dim, HorizontalAlignment.Left), row, 1);
-            Put(grid, Label(Pct(pct), 14, src.Stale ? Theme.StaleText : Text, HorizontalAlignment.Right, bold: true, right: Gap(10, 6)), row, 2);
-            double w = Gap(88, 72), h = 4;
-            var bar = new Grid { Width = w, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            bar.Children.Add(Bar(pct, w, h, horizontal: true, src.Stale));
-            // The share of the Window gone by; unknown until the Window has started.
-            double? gone = reset is { } at ? Math.Clamp(1 - (at - now) / window, 0, 1) : null;
-            if (gone is { } t)
-                bar.Children.Add(new Border
-                {
-                    Width = 2, Height = h + 6, Background = src.Stale ? Theme.StaleText : Text, CornerRadius = new CornerRadius(1),
-                    HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(Math.Clamp(w * t - 1, 0, w - 2), 0, 0, 0),
-                });
-            Put(grid, bar, row, 3);
-            // No verdict on old numbers.
-            if (pct is { } p && gone is { } g && !src.Stale)
-            {
-                var fast = p - g * 100 > 5;
-                Put(grid, Label(fast ? "fast" : "on pace", 11, fast ? Amber : Dim, HorizontalAlignment.Left, left: Gap(10, 8)), row, 4);
-            }
-        }
-        ResetAndStatus(grid, src, 5);
-        return grid;
-    });
-
-    // J: Target with no text: the rings around each logo are the whole widget. Hover a ring for its numbers.
-    UIElement Halo()
-    {
-        var row = new StackPanel { Orientation = Orientation.Horizontal };
-        foreach (var src in Sources())
-        {
-            double d = Gap(44, 34), stroke = Gap(4.5, 3.5);
-            var ring = new Grid { Width = d, Height = d, Background = Brushes.Transparent, Margin = new Thickness(row.Children.Count > 0 ? Gap(10, 6) : 0, 0, 0, 0) };
-            RingArc(ring, src.U?.SessionPct, d, stroke, src.Stale);
-            RingArc(ring, src.U?.WeeklyPct, d - 2 * stroke - 4, stroke, src.Stale);
-            var logo = SourceLogo(src, Gap(14, 12));
-            logo.HorizontalAlignment = HorizontalAlignment.Center;
-            ring.Children.Add(logo);
-            // No status line to say the numbers are old, so a small badge does.
-            if (src.Err is { } err)
-            {
-                var badge = new Grid { Width = 13, Height = 13, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, -3, -3) };
-                badge.Children.Add(new Ellipse { Fill = Theme.CardBg });
-                var warn = Glyph(Theme.WarningGlyph, 8, NeedsAction(err) ? Theme.Critical : Theme.Tertiary);
-                warn.HorizontalAlignment = HorizontalAlignment.Center;
-                warn.Margin = new Thickness(0, 0, 0, 1);
-                badge.Children.Add(warn);
-                ring.Children.Add(badge);
-            }
-            row.Children.Add(Tip(ring, src, mini: true));
-        }
-        return row;
-    }
-
-    /// Blocks one under the other, a divider between them (Pill and the row looks).
-    UIElement Stacked(Func<Source, FrameworkElement> block, double? gap = null)
-    {
-        var stack = new StackPanel();
-        foreach (var src in Sources())
-        {
-            if (stack.Children.Count > 0)
-                stack.Children.Add(new Border { Height = 1, Background = Theme.Divider, Margin = new Thickness(0, gap ?? Gap(8, 5.5), 0, gap ?? Gap(8, 2.5)) });
-            stack.Children.Add(Tip(block(src), src));
-        }
-        return stack;
-    }
-
-    /// Two rows (5h, 7d) in fixed-width columns; column 0 holds the logo when Codex is shown.
-    Grid Rows(Source src, params double[] widths)
-    {
-        var grid = new Grid { Background = Brushes.Transparent };
-        foreach (var w in widths) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(w) });
-        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(Gap(22, 18)) });
-        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(Gap(22, 18)) });
-        if (ShowCodex)
-        {
-            var logo = SourceLogo(src, 16);
-            logo.Margin = new Thickness(0, 1, 0, 0);
-            logo.HorizontalAlignment = HorizontalAlignment.Left;
-            Put(grid, logo, 0, 0, rowSpan: 2);
-        }
-        return grid;
-    }
-
-    static void Put(Grid grid, UIElement el, int row, int col, int rowSpan = 1)
-    {
-        Grid.SetRow(el, row); Grid.SetColumn(el, col); Grid.SetRowSpan(el, rowSpan);
-        grid.Children.Add(el);
-    }
-
-    /// The Reset on the first row and the status on the second, right-aligned in column `col`.
-    void ResetAndStatus(Grid grid, Source src, int col)
-    {
-        var reset = ResetIn(src);
-        reset.HorizontalAlignment = HorizontalAlignment.Right;
-        Put(grid, reset, 0, col);
-        var status = Status(src);
-        status.HorizontalAlignment = HorizontalAlignment.Right;
-        Put(grid, status, 1, col);
-    }
-
-    /// The time to the Session Reset. It stays true while the numbers are Stale, so it is only dimmed.
-    FrameworkElement ResetIn(Source src)
-    {
-        var color = src.Stale ? Theme.StaleText : Theme.Secondary;
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Visibility = src.U == null ? Visibility.Hidden : Visibility.Visible };
-        row.Children.Add(Glyph(Theme.ResetGlyph, 10, color, right: 4));
-        row.Children.Add(Label(src.U == null ? "—" : Countdown(src.U.SessionReset), 12, color, HorizontalAlignment.Left));
-        return row;
-    }
-
-    /// The Update time, or a short reason the numbers are Stale; the full reason is in the tooltip.
-    FrameworkElement Status(Source src)
-    {
-        if (src.Err is not { } err)
-            return Label(src.Ok is { } t ? $"Updated {t:HH:mm}" : "Updating…", 11, Dim, HorizontalAlignment.Left);
-        var color = NeedsAction(err) ? Theme.Critical : Theme.Tertiary;
-        var row = new StackPanel { Orientation = Orientation.Horizontal };
-        row.Children.Add(Glyph(Theme.WarningGlyph, 10, color, right: 4));
-        row.Children.Add(Label(Short(err), 11, color, HorizontalAlignment.Left));
-        return row;
-    }
-
-    /// Hover a source for a card with both limits, both Resets, and why and since when it is Stale. It opens above
-    /// the source, since the widget sits on the taskbar. `mini`: Halo's one line with just the numbers.
-    FrameworkElement Tip(FrameworkElement el, Source src, bool mini = false)
-    {
-        var tip = new ToolTip { Style = (Style)FindResource(mini ? "MiniTip" : "CardTip"), Content = mini ? MiniCard(src) : Card(src) };
+        var tip = new ToolTip { Style = (Style)FindResource("CardTip"), Content = Card(src) };
         tip.Opened += (_, _) => tipOpen = true;
         tip.Closed += (_, _) => tipOpen = false;
         el.ToolTip = tip;
@@ -973,29 +1019,6 @@ class PrototypeWindow : Window
         card.Children.Add(new Border { Height = 1, Background = Theme.Divider, Margin = new Thickness(0, 6, 0, 0) });
         card.Children.Add(foot);
         return card;
-    }
-
-    FrameworkElement MiniCard(Source src)
-    {
-        var u = src.U;
-        var numbers = src.Stale ? Theme.StaleText : Text;
-        var line = new StackPanel { Orientation = Orientation.Horizontal };
-        if (u == null) line.Children.Add(Label($"{src.Name}: no Usage yet", 12, Theme.Secondary, HorizontalAlignment.Left));
-        else
-        {
-            foreach (var (name, pct) in new[] { ("5h", u.SessionPct), ("7d", u.WeeklyPct) })
-            {
-                line.Children.Add(Label(name, 12, Dim, HorizontalAlignment.Left, left: line.Children.Count > 0 ? 8 : 0));
-                line.Children.Add(Label(Pct(pct), 12, numbers, HorizontalAlignment.Left, left: 4));
-            }
-            var color = src.Stale ? Theme.StaleText : Theme.Secondary;
-            line.Children.Add(Glyph(Theme.ResetGlyph, 10, color, right: 4));
-            line.Children[^1].SetValue(MarginProperty, new Thickness(8, 1, 4, 0));
-            line.Children.Add(Label(Countdown(u.SessionReset), 12, color, HorizontalAlignment.Left));
-        }
-        if (src.Err is { } err)
-            line.Children.Add(Label(Short(err), 12, NeedsAction(err) ? Theme.Critical : Theme.Tertiary, HorizontalAlignment.Left, left: 8));
-        return line;
     }
 
     /// Only the user can fix these: sign in, or run the agent once to refresh its token.

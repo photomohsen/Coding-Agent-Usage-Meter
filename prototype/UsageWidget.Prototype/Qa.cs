@@ -34,19 +34,42 @@ static class Qa
                 foreach (var s in states)
                     Save(widget.QaCard(look, compact, s.Codex, s.Claude, s.Cx),
                         Path.Combine(folder, $"{name}{(compact ? "-compact" : "")}-{s.Name}.png"));
-        // Dev servers under the looks, and Halo's short rows.
+        // A few parts the suggested sets don't show, each on Bars full (or Numbers) with both sources.
+        LookOptions Set(int look, Action<LookOptions> change)
+        {
+            var o = LookOptions.Default(look, false);
+            change(o);
+            return o;
+        }
+        foreach (var (look, si, file, o) in new[]
+        {
+            (0, 2, "pace", Set(0, o => { o.Tick = o.PaceWords = true; o.Rotate = false; })),
+            (0, 2, "blocks", Set(0, o => o.BarStyle = BarStyle.Blocks)),
+            (0, 3, "updated-clock", Set(0, o => { o.Updated = true; o.Reset = ResetShow.ClockTime; })),
+            (0, 1, "session-only", Set(0, o => o.Limits = Limits.Session)),
+            (0, 1, "side-by-side", Set(0, o => o.Arrange = Arrangement.SideBySide)),
+            (5, 2, "updated", Set(5, o => o.Updated = true)),
+            (1, 3, "session-only", Set(1, o => o.Limits = Limits.Session)),
+            (2, 1, "no-labels", Set(2, o => o.Labels = false)),
+            (3, 2, "rotate", Set(3, o => o.Rotate = true)),
+        })
+        {
+            var s = states[si];
+            Save(widget.QaCard(look, false, s.Codex, s.Claude, s.Cx, options: o),
+                Path.Combine(folder, $"option-{(char)('A' + look)}-{PrototypeWindow.LookNames[look].ToLower()}-{file}.png"));
+        }
+        // Dev servers under the looks: full rows, and the short ones under a narrow look.
         var servers = new List<DevServer>
         {
             new(18244, "node", 3000, true) { Project = "usage-site", Folder = @"C:\Users\you\Projects\usage-site", CommandLine = "node node_modules/next/dist/bin/next dev" },
             new(20112, "node", 5173, true) { Project = "design-tool", Folder = @"C:\Users\you\Projects\design-tool" },
         };
         foreach (var compact in new[] { false, true })
-            foreach (var look in new[] { 0, 4, 5, 8, 9 })
+            foreach (var look in new[] { 0, 2 })
                 Save(widget.QaCard(look, compact, true, states[1].Claude, states[1].Cx, servers),
                     Path.Combine(folder, $"servers-{(char)('A' + look)}-{PrototypeWindow.LookNames[look].ToLower()}{(compact ? "-compact" : "")}.png"));
-        // The hover cards: every look's card and Halo's one line, on a normal, a Stale and a no-Usage source.
-        foreach (var (look, si, src, file) in new[] { (8, 1, 0, "full-normal"), (8, 3, 0, "full-stale"), (8, 5, 1, "full-signin"),
-                     (9, 1, 0, "mini-normal"), (9, 4, 1, "mini-stale"), (9, 5, 1, "mini-none") })
+        // The hover card, the same in every look, on a normal, a Stale and a no-Usage source.
+        foreach (var (look, si, src, file) in new[] { (0, 1, 0, "normal"), (0, 3, 0, "stale"), (0, 5, 1, "signin") })
         {
             var s = states[si];
             widget.QaCard(look, false, s.Codex, s.Claude, s.Cx);

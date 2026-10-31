@@ -126,7 +126,7 @@ static class Theme
     </Setter>
   </Style>
 
-  <!-- Hover on a source: a card in the widget's style. MiniTip is Halo's one line. -->
+  <!-- Hover on a source: a card in the widget's style. -->
   <Style x:Key="CardTip" TargetType="ToolTip">
     <Setter Property="OverridesDefaultStyle" Value="True"/>
     <Setter Property="HasDropShadow" Value="False"/>
@@ -144,20 +144,8 @@ static class Theme
       </Setter.Value>
     </Setter>
   </Style>
-  <Style x:Key="MiniTip" TargetType="ToolTip" BasedOn="{StaticResource CardTip}">
-    <Setter Property="Template">
-      <Setter.Value>
-        <ControlTemplate TargetType="ToolTip">
-          <Border Margin="6,2,6,10" Background="#2B2B2B" BorderBrush="#29FFFFFF" BorderThickness="1" CornerRadius="6"
-                  Padding="8,4" Effect="{StaticResource Shadow}">
-            <ContentPresenter/>
-          </Border>
-        </ControlTemplate>
-      </Setter.Value>
-    </Setter>
-  </Style>
 
-  <!-- Dev servers: Close at the end of a row, and Halo's short × -->
+  <!-- Dev servers: Close at the end of a row, and the short × of a narrow look -->
   <Style x:Key="ServerClose" TargetType="Button">
     <Setter Property="Foreground" Value="#EF5350"/>
     <Setter Property="FontSize" Value="10"/>

@@ -16,11 +16,16 @@ class SettingsWindow : Window
     readonly Settings s;
     readonly Action apply;
     readonly StackPanel panel = new() { Margin = new Thickness(20, 4, 20, 14) };
+    /// The parts of the current look and set, rebuilt when either changes.
+    readonly StackPanel options = new();
+    // Where Row, Switch and Line add to: the panel, or the options while they are built.
+    StackPanel target;
 
     public SettingsWindow(Settings settings, Action apply, Action resetPosition)
     {
         s = settings;
         this.apply = apply;
+        target = panel;
         Title = "Coding Agent Usage Meter settings";
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
@@ -51,10 +56,13 @@ class SettingsWindow : Window
         TextElement.SetForeground(card, Theme.Primary);
         Content = card;
 
-        Row("Look", Segments(PrototypeWindow.LookNames, s.Look, i => s.Look = i, columns: 4));
+        Row("Look", Segments(PrototypeWindow.LookNames, s.Look, i => { s.Look = i; BuildOptions(); }, columns: 3));
+        Switch("Compact", s.Compact, v => { s.Compact = v; BuildOptions(); });
+        panel.Children.Add(options);
+        BuildOptions();
+        Line();
         Row("Tray icon", Segments(["Bars", "Rings"], s.TrayStyle, i => s.TrayStyle = i));
         Row("Size", Percent(s.Scale, 50, 300, v => s.Scale = v));
-        Switch("Compact", s.Compact, v => s.Compact = v);
         Row("Opacity when idle", Percent(s.IdleOpacity, 30, 100, v => s.IdleOpacity = v));
         int[] minutes = [1, 2, 5, 10, 15, 30];
         Row("Update every", Segments(minutes.Select(m => $"{m}m").ToArray(), Math.Max(0, Array.IndexOf(minutes, s.UpdateMinutes)),
@@ -91,6 +99,45 @@ class SettingsWindow : Window
         return content;
     }
 
+    /// What the current look shows in its Full or Compact set: only the parts that apply to that look.
+    void BuildOptions()
+    {
+        options.Children.Clear();
+        target = options;
+        var look = Math.Clamp(s.Look, 0, LookOptions.Names.Length - 1);
+        var o = s.Options(look);
+        var head = new DockPanel { Margin = new Thickness(0, 10, 0, 2) };
+        var back = new Button { Content = "Back to suggested", Style = Style("Link"), ToolTip = "The parts this set shows at first", Margin = new Thickness(0, 0, -8, 0) };
+        back.Click += (_, _) => Changed(() => { s.ResetOptions(look); BuildOptions(); });
+        DockPanel.SetDock(back, Dock.Right);
+        head.Children.Add(back);
+        head.Children.Add(new TextBlock
+        {
+            Text = $"{LookOptions.Names[look]} · {(s.Compact ? "Compact" : "Full")}", FontSize = 12, FontWeight = FontWeights.SemiBold,
+            Foreground = Theme.Secondary, VerticalAlignment = VerticalAlignment.Center,
+        });
+        options.Children.Add(head);
+        foreach (var part in LookOptions.Shown(look))
+            switch (part)
+            {
+                case "Limits": Row("Limits", Segments(["5h and 7d", "5h only", "Higher one"], (int)o.Limits, i => o.Limits = (Limits)i)); break;
+                case "Arrange": Row("Agents", Segments(["Stacked", "Side by side"], (int)o.Arrange, i => o.Arrange = (Arrangement)i)); break;
+                case "Logo": Switch("Logo", o.Logo, v => o.Logo = v); break;
+                case "Pct": Switch("Percent", o.Pct, v => o.Pct = v); break;
+                case "Labels": Switch("5h / 7d labels", o.Labels, v => o.Labels = v); break;
+                case "BarStyle": Row("Bar style", Segments(["Smooth", "Blocks"], (int)o.BarStyle, i => o.BarStyle = (BarStyle)i)); break;
+                case "BarLength": Row("Bar length", Segments(["Short", "Long"], (int)o.BarLength, i => o.BarLength = (BarLength)i)); break;
+                case "Tick": Switch("Pace tick", o.Tick, v => o.Tick = v); break;
+                case "PaceWords": Switch("\"fast\" / \"on pace\"", o.PaceWords, v => o.PaceWords = v); break;
+                case "Hairline": Switch("Hairline bar", o.Hairline, v => o.Hairline = v); break;
+                case "Reset": Row("Reset", Segments(["Off", "Time left", "Clock time"], (int)o.Reset, i => o.Reset = (ResetShow)i)); break;
+                case "Rotate": Switch("Rotate reset time", o.Rotate, v => o.Rotate = v); break;
+                case "Updated": Switch("\"Updated\" time", o.Updated, v => o.Updated = v); break;
+                case "Stale": Row("When stale", Segments(["Reason", "Icon only"], (int)o.Stale, i => o.Stale = (StaleShow)i)); break;
+            }
+        target = panel;
+    }
+
     static new Style Style(string key) => (Style)Application.Current.Resources[key];
 
     void Changed(Action set)
@@ -113,10 +160,10 @@ class SettingsWindow : Window
         control.Width = ControlWidth;
         control.VerticalAlignment = VerticalAlignment.Center;
         row.Children.Add(control);
-        panel.Children.Add(row);
+        target.Children.Add(row);
     }
 
-    void Line() => panel.Children.Add(new Border { Height = 1, Background = Theme.Divider, Margin = new Thickness(0, 8, 0, 8) });
+    void Line() => target.Children.Add(new Border { Height = 1, Background = Theme.Divider, Margin = new Thickness(0, 8, 0, 8) });
 
     /// One choice of several, as segments on a faint track; more than `columns` wrap onto further rows.
     FrameworkElement Segments(string[] names, int selected, Action<int> set, int columns = 0)
@@ -178,6 +225,6 @@ class SettingsWindow : Window
             if (save) Changed(() => set(box.IsChecked == true));
             else set(box.IsChecked == true);
         };
-        panel.Children.Add(box);
+        target.Children.Add(box);
     }
 }
