@@ -53,6 +53,7 @@ class SettingsWindow : Window
 
         Row("Look", Segments(["Rings", "Pill", "Strip"], s.Look, i => s.Look = i));
         Row("Size", Percent(s.Scale, 50, 300, v => s.Scale = v));
+        Switch("Compact", s.Compact, v => s.Compact = v);
         Row("Opacity when idle", Percent(s.IdleOpacity, 30, 100, v => s.IdleOpacity = v));
         int[] minutes = [1, 2, 5, 10, 15, 30];
         Row("Update every", Segments(minutes.Select(m => $"{m}m").ToArray(), Math.Max(0, Array.IndexOf(minutes, s.UpdateMinutes)),

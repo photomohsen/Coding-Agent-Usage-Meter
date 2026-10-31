@@ -29,9 +29,11 @@ static class Qa
             ("6-codex-none", true, (U(42, 28), at, null), (null, null, "Sign in to Codex first")),
         };
         var widget = new PrototypeWindow(startDocked: false);
-        foreach (var (look, name) in new[] { (0, "A-rings"), (1, "B-pill"), (2, "C-strip") })
-            foreach (var s in states)
-                Save(widget.QaCard(look, s.Codex, s.Claude, s.Cx), Path.Combine(folder, $"{name}-{s.Name}.png"));
+        foreach (var compact in new[] { false, true })
+            foreach (var (look, name) in new[] { (0, "A-rings"), (1, "B-pill"), (2, "C-strip") })
+                foreach (var s in states)
+                    Save(widget.QaCard(look, compact, s.Codex, s.Claude, s.Cx),
+                        Path.Combine(folder, $"{name}{(compact ? "-compact" : "")}-{s.Name}.png"));
         // A ContextMenu can only be drawn while it is open in its own popup.
         var menu = widget.QaMenu();
         menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Absolute;

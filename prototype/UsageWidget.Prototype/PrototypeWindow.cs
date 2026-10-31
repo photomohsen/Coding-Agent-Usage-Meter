@@ -81,7 +81,7 @@ class PrototypeWindow : Window
         frame = new Border
         {
             Background = Theme.CardBg, BorderBrush = Edge, BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(10), Padding = new Thickness(14, 12, 14, 12), Child = body,
+            Child = body,
         };
         Content = frame;
 
@@ -230,6 +230,10 @@ class PrototypeWindow : Window
             stack.Children.Add(Label($"◀ {v.Key} · {v.Name} ▶", 10, Amber, HorizontalAlignment.Center));
         stack.Children.Add(v.Build());
         gauge.Content = stack;
+        // Text carries its own space above the letters; a logo or a ring on top doesn't, so it gets more padding.
+        var textOnTop = current == 1 || (current == 2 && !ShowCodex);
+        frame.Padding = settings.Compact ? new Thickness(8, textOnTop ? 4.5 : 7.5, 8, 6) : new Thickness(14, 12, 14, 12);
+        frame.CornerRadius = new CornerRadius(Gap(10, 8));
         if (frame.LayoutTransform is not ScaleTransform s || s.ScaleX != settings.Scale)
             frame.LayoutTransform = new ScaleTransform(settings.Scale, settings.Scale);
 
@@ -241,12 +245,13 @@ class PrototypeWindow : Window
     bool? qaCodex;
 
     /// QA only (--qa): the card with made-up Usage, taken out of the window so it can be drawn to a file.
-    internal FrameworkElement QaCard(int look, bool codex, (Usage?, DateTime?, string?) claude, (Usage?, DateTime?, string?) cx)
+    internal FrameworkElement QaCard(int look, bool compact, bool codex, (Usage?, DateTime?, string?) claude, (Usage?, DateTime?, string?) cx)
     {
         Content = null;
         qaCodex = codex;
         current = look;
         settings.Scale = 1; // never saved: QA doesn't touch the settings file
+        settings.Compact = compact;
         (last, lastOk, error) = claude;
         (codexLast, codexOk, codexError) = cx;
         Render();
@@ -382,13 +387,18 @@ class PrototypeWindow : Window
         menu.Items.Add(new Separator());
         var looks = variants.Select((v, i) => Item(v.Name, () => Switch(i), "")).ToArray();
         menu.Items.Add(new Separator());
+        var compact = Item("Compact", () => { settings.Compact = !settings.Compact; settings.Save(); Render(); });
         Item("Dock to taskbar", Dock);
         Item("Settings…", OpenSettings);
         Item("Help…", ShowHelp);
         menu.Items.Add(new Separator());
         Item("Quit", () => Application.Current.Shutdown());
         // Tick the current look each time the menu opens.
-        void Tick() { for (var i = 0; i < looks.Length; i++) looks[i].IsChecked = i == current; }
+        void Tick()
+        {
+            for (var i = 0; i < looks.Length; i++) looks[i].IsChecked = i == current;
+            compact.IsChecked = settings.Compact;
+        }
         menu.Opened += (_, _) => Tick();
         Tick();
         return menu;
@@ -403,6 +413,9 @@ class PrototypeWindow : Window
         public string Name => Icon == "claude" ? "Claude" : "Codex";
     }
 
+    /// A space in the normal look, or the smaller one when Compact.
+    double Gap(double normal, double compact) => settings.Compact ? compact : normal;
+
     IEnumerable<Source> Sources()
     {
         yield return new("claude", last, lastOk, error);
@@ -416,7 +429,7 @@ class PrototypeWindow : Window
         foreach (var src in Sources())
         {
             if (row.Children.Count > 0)
-                row.Children.Add(new Border { Width = 1, Background = Theme.Divider, Margin = new Thickness(14, 2, 14, 2) });
+                row.Children.Add(new Border { Width = 1, Background = Theme.Divider, Margin = new Thickness(Gap(14, 8), 2, Gap(14, 8), 2) });
             row.Children.Add(Tip(block(src), src));
         }
         return row;
@@ -425,15 +438,15 @@ class PrototypeWindow : Window
     // A: two ring gauges per source.
     UIElement Rings() => SideBySide(src =>
     {
-        var col = new StackPanel { Width = 104 };
-        if (ShowCodex) col.Children.Add(Centered(SourceLogo(src, 14), bottom: 8));
+        var col = new StackPanel { Width = Gap(104, 94) };
+        if (ShowCodex) col.Children.Add(Centered(SourceLogo(src, 14), bottom: Gap(8, 5)));
         var rings = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
         rings.Children.Add(Ring(src.U?.SessionPct, "5h", src.Stale));
-        rings.Children.Add(new Border { Width = 12 });
+        rings.Children.Add(new Border { Width = Gap(12, 6) });
         rings.Children.Add(Ring(src.U?.WeeklyPct, "7d", src.Stale));
         col.Children.Add(rings);
-        col.Children.Add(Centered(ResetIn(src), top: 8));
-        col.Children.Add(Centered(Status(src), top: 2));
+        col.Children.Add(Centered(ResetIn(src), top: Gap(8, 4)));
+        col.Children.Add(Centered(Status(src), top: Gap(2, 0)));
         return col;
     });
 
@@ -461,7 +474,7 @@ class PrototypeWindow : Window
 
         var stack = new StackPanel();
         stack.Children.Add(grid);
-        stack.Children.Add(Label(name, 11, Dim, HorizontalAlignment.Center, top: 4));
+        stack.Children.Add(Label(name, 11, Dim, HorizontalAlignment.Center, top: Gap(4, 1.5)));
         return stack;
     }
 
@@ -472,12 +485,12 @@ class PrototypeWindow : Window
         foreach (var src in Sources())
         {
             if (stack.Children.Count > 0)
-                stack.Children.Add(new Border { Height = 1, Background = Theme.Divider, Margin = new Thickness(0, 8, 0, 8) });
+                stack.Children.Add(new Border { Height = 1, Background = Theme.Divider, Margin = new Thickness(0, Gap(8, 5.5), 0, Gap(8, 2.5)) });
             var grid = new Grid { Background = Brushes.Transparent };
-            foreach (var w in new[] { ShowCodex ? 28 : 0, 22, 46, 100, 84.0 })
+            foreach (var w in new[] { ShowCodex ? Gap(28, 22) : 0, Gap(22, 20), Gap(46, 40), Gap(100, 80), 84 })
                 grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(w) });
-            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(22) });
-            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(22) });
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(Gap(22, 18)) });
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(Gap(22, 18)) });
             void Put(UIElement el, int row, int col, int rowSpan = 1)
             {
                 Grid.SetRow(el, row); Grid.SetColumn(el, col); Grid.SetRowSpan(el, rowSpan);
@@ -493,8 +506,8 @@ class PrototypeWindow : Window
             void Limit(int r, string name, double? pct)
             {
                 Put(Label(name, 12, Dim, HorizontalAlignment.Left), r, 1);
-                Put(Label(Pct(pct), 14, src.Stale ? Theme.StaleText : Text, HorizontalAlignment.Right, bold: true, right: 10), r, 2);
-                Put(Bar(pct, 88, 4, horizontal: true, src.Stale), r, 3);
+                Put(Label(Pct(pct), 14, src.Stale ? Theme.StaleText : Text, HorizontalAlignment.Right, bold: true, right: Gap(10, 6)), r, 2);
+                Put(Bar(pct, Gap(88, 72), 4, horizontal: true, src.Stale), r, 3);
             }
             Limit(0, "5h", src.U?.SessionPct);
             Limit(1, "7d", src.U?.WeeklyPct);
@@ -512,20 +525,20 @@ class PrototypeWindow : Window
     // C: per source, two filling columns like batteries.
     UIElement Strip() => SideBySide(src =>
     {
-        var col = new StackPanel { Width = 88 };
-        if (ShowCodex) col.Children.Add(Centered(SourceLogo(src, 14), bottom: 8));
+        var col = new StackPanel { Width = Gap(88, 82) };
+        if (ShowCodex) col.Children.Add(Centered(SourceLogo(src, 14), bottom: Gap(8, 2)));
         var bars = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
         foreach (var (name, pct) in new[] { ("5h", src.U?.SessionPct), ("7d", src.U?.WeeklyPct) })
         {
-            var c = new StackPanel { Width = 38 };
+            var c = new StackPanel { Width = Gap(38, 37) };
             c.Children.Add(Label(Pct(pct), 13, src.Stale ? Theme.StaleText : Text, HorizontalAlignment.Center, bold: true, bottom: 4));
             c.Children.Add(Centered(Bar(pct, 8, 64, horizontal: false, src.Stale)));
-            c.Children.Add(Label(name, 11, Dim, HorizontalAlignment.Center, top: 4));
+            c.Children.Add(Label(name, 11, Dim, HorizontalAlignment.Center, top: Gap(4, 2)));
             bars.Children.Add(c);
         }
         col.Children.Add(bars);
-        col.Children.Add(Centered(ResetIn(src), top: 8));
-        col.Children.Add(Centered(Status(src), top: 2));
+        col.Children.Add(Centered(ResetIn(src), top: Gap(8, 4)));
+        col.Children.Add(Centered(Status(src), top: Gap(2, 0)));
         return col;
     });
 
