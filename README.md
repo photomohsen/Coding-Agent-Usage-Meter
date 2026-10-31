@@ -1,97 +1,142 @@
 # Coding Agent Usage Meter
 
-A small Windows desktop widget that shows how much of your coding agents' usage limits you have used: **Claude Code** and **Codex**, side by side, always in view.
+**A small Windows widget that shows how much of your Claude Code and Codex limits you have used.**
 
-![The widget in its Pill look, Claude above Codex](docs/images/pill.png)
+![The widget: Claude on top, Codex below](docs/images/pill.png)
 
-Both tools have a **5-hour Session limit** and a **7-day Weekly limit**. Hitting one in the middle of a task is annoying, and checking means opening `/usage` or `/status` each time. This widget keeps the numbers on your desktop and updates them on its own.
+## What it does
 
-> Not affiliated with Anthropic or OpenAI. It reads endpoints that are not documented, so an update on their side can break it.
+Claude Code and Codex both stop you when you hit a limit: one that resets every **5 hours** and one that resets every **7 days**. This widget sits on your desktop and shows both, so you always know how much you have left.
 
-## What it shows
+- **5h** and **7d** show how much of each limit is used. The bar turns amber at 75% and red at 90%.
+- **↻ 2h 13m** is the time until the 5-hour limit resets.
+- It updates by itself every few minutes. Click it to update now.
+- If it can't update (offline, signed out), the numbers turn grey and it says why.
 
-For each agent:
+Codex shows up by itself if you have it installed. If not, you only see Claude.
 
-- **5h** and **7d**: the percentage of your Session and Weekly limit used. The bar turns amber at 75% and red at 90%.
-- **↻ 2h 13m**: time until the Session limit resets.
-- **Updated 10:36**: when the numbers were last fetched. If an update fails, the numbers turn grey (Stale) and the line says why, for example *Offline* or *Token expired*. Hover the widget for the full details.
-
-Codex appears automatically when it is installed (`~/.codex` exists). Without it, the widget shows Claude only. You can also hide Codex in Settings.
-
-## Looks
-
-Pick a look in Settings, or press **←** / **→** on the widget.
-
-| Pill (default) | Rings | Strip |
-|---|---|---|
-| ![Pill](docs/images/pill.png) | ![Rings](docs/images/rings.png) | ![Strip](docs/images/strip.png) |
-
-- **Compact** shows the same parts with less space around them.
-- **Size** scales the widget from 50% to 300% (or Ctrl + mouse wheel).
-- **Docked in the taskbar** turns it into its own taskbar button. The label reads `70 28 · 17 7` (Weekly %, then Session %, Claude first), and the icon shows the time to the Session reset.
-
-## Requirements
-
-- Windows 11
-- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
-- [Claude Code](https://docs.claude.com/en/docs/claude-code) (the `claude` command), signed in with a Claude Pro or Max plan
-- Optional: [Codex](https://github.com/openai/codex), signed in with ChatGPT
+> For **Windows 11** only. Not made by or connected to Anthropic or OpenAI.
 
 ## Install
 
+You need:
+
+- **Windows 11**
+- **Claude Code**, signed in with a Claude Pro or Max plan. Check by running `claude` in a terminal.
+- **Codex** (optional), signed in with ChatGPT
+
+### The quick way
+
+Open **PowerShell** (Start → type `PowerShell`), paste this line and press Enter:
+
+```powershell
+irm https://raw.githubusercontent.com/photomohsen/Coding-Agent-Usage-Meter/main/install.ps1 | iex
+```
+
+It downloads the widget to `%LOCALAPPDATA%\Coding Agent Usage Meter`, installs .NET 10 if you don't have it, puts a **Coding Agent Usage Meter** shortcut on your desktop and starts the widget. Paste the same line again later to update it.
+
+### Or download the ZIP
+
+**1. Download it.** On this page click **Code → Download ZIP**, then unzip it to a folder you'll keep (for example `Documents\Coding Agent Usage Meter`). The widget runs from this folder, so don't delete it.
+
+**2. Double-click `Install.cmd`.** It:
+
+- installs .NET 10 if you don't have it
+- builds the widget
+- puts a **Coding Agent Usage Meter** shortcut on your desktop
+- starts the widget
+
+If Windows shows *"Windows protected your PC"*, click **More info → Run anyway**.
+
+**3. That's it.** The widget appears above the clock. Drag it anywhere.
+
+### Starting it later
+
+- Double-click **Coding Agent Usage Meter** on your desktop.
+- Or let it start by itself: right-click the widget → **Settings** → turn on **Start with Windows**.
+
+To quit, right-click the widget → **Quit**.
+
+<details>
+<summary>Install by hand instead</summary>
+
 ```bash
+winget install Microsoft.DotNet.SDK.10
 git clone https://github.com/photomohsen/Coding-Agent-Usage-Meter.git
 cd Coding-Agent-Usage-Meter
 dotnet build prototype/UsageWidget.Prototype
 ```
 
-Then double-click **`Start Widget.vbs`**. It starts the widget without a console window. It appears above the clock. Drag it wherever you like and it remembers the spot.
+Then double-click `Start Widget.vbs` to start it.
 
-To start it with Windows, turn on **Start with Windows** in Settings.
+</details>
 
-## Using it
+### Update to a new version
+
+Download the new ZIP, unzip it over the old folder, and double-click `Install.cmd` again. Your settings are kept.
+
+## Use it
 
 | Do this | To |
 |---|---|
 | Click | Update now |
-| Drag | Move it |
-| Ctrl + mouse wheel | Resize |
+| Drag | Move it (it remembers where). Drop it near the clock and it snaps into place just above it |
+| Hover | See the full numbers and reset times |
+| Right-click | Open the menu: Settings, Compact, Quit |
+| Ctrl + mouse wheel | Make it bigger or smaller |
 | ← / → | Switch look |
-| Hover | See full numbers, reset times and any error |
-| Right-click | Menu: Update now, Compact, Dock to taskbar, Settings, Help, Quit |
+
+### Looks
+
+| Pill (default) | Rings | Strip |
+|---|---|---|
+| ![Pill](docs/images/pill.png) | ![Rings](docs/images/rings.png) | ![Strip](docs/images/strip.png) |
+
+In **Settings** you can also make it **Compact** (less space) or change its size.
+
+### Tray icon
+
+Next to the clock there is a small icon with two bars: Claude on top, Codex below. Each bar fills with the usage and turns amber at 75% and red at 90%. It turns grey when the numbers are old.
+
+In **Settings → Tray icon** you can pick **Rings** instead of bars: Claude is the outer ring and Codex the inner one. Without Codex, the outer ring is the 5-hour use and the inner ring the 7-day use.
+
+![Tray icon](docs/images/tray.png)
+
+| Do this | To |
+|---|---|
+| Hover the icon | See the numbers |
+| Click the icon | Hide or show the widget |
+| Right-click the icon | Update now, Settings, Quit |
+
+The widget also hides by itself while a full-screen app, game or presentation is open.
 
 ![Settings](docs/images/settings.png)
 
-Settings apply at once and are saved to `%APPDATA%\ClaudeUsageWidget\settings.json`.
+It also lists any local dev servers you have running (`localhost:3000` and so on), so you can open or stop them with one click.
 
-## How it works
+## Is it safe?
 
-Everything stays on your PC. The widget only reads the sign-in files the agents already keep, and it only talks to the services those agents already use.
+Yes. It only reads, on your own PC, the sign-in that Claude Code and Codex already saved, and asks Anthropic and OpenAI for your usage. Nothing is sent anywhere else, and it never changes your sign-in.
+
+Each PC shows the usage of whoever is signed in on it.
+
+<details>
+<summary>Details for developers</summary>
 
 | Agent | Reads | Asks |
 |---|---|---|
 | Claude Code | `~/.claude/.credentials.json` | `api.anthropic.com/api/oauth/usage` |
 | Codex | `~/.codex/auth.json` | `chatgpt.com/backend-api/wham/usage` |
 
-- **The tokens are read-only.** The widget never refreshes or writes them, because refreshing rotates the sign-in and could sign you out of the agent. When the Claude token has expired, it runs `claude auth status` in the background (at most every 10 minutes), so the Claude CLI refreshes it the normal way. The Claude desktop app keeps its own sign-in, which is why this file can go out of date while you work in the app.
-- **When Codex can't be reached**, the widget shows the last limits Codex wrote to its own session logs (`~/.codex/sessions`), marked Stale with their time.
-- Nothing is sent anywhere else, and no account is involved: each PC shows the usage of whoever is signed in on it.
+- The tokens are read-only. When the Claude token has expired, the widget runs `claude auth status` in the background (at most every 10 minutes) so the Claude CLI refreshes it.
+- When Codex can't be reached, it shows the last limits from Codex's own logs (`~/.codex/sessions`), in grey.
+- These endpoints aren't documented, so a change on their side can break the widget.
+- Settings are saved in `%APPDATA%\ClaudeUsageWidget\settings.json`.
+- It runs through `dotnet.exe` instead of its own `.exe`, so it also works where unsigned programs are blocked.
+- `dotnet <dll> --qa <folder>` draws every look and state to PNG files with made-up numbers.
+- Why it works this way: [docs/adr](docs/adr).
 
-The reasons behind these choices are in [docs/adr](docs/adr).
-
-## Also in the widget: dev servers
-
-Below the usage, the widget lists local dev servers that are running (node, python, dotnet, vite and similar) with their `localhost` port. Click one to open it in the browser, or **Close** to stop it. The list is hidden when nothing is running.
-
-## Status
-
-This is a working prototype (`prototype/UsageWidget.Prototype`). The plan for the full version is in [.scratch/usage-widget](.scratch/usage-widget). It runs through `dotnet.exe` instead of its own `.exe`, so it also works on PCs whose app control blocks unsigned programs.
-
-To check a change without waiting for real errors or high usage, render every look and state to PNG files with made-up numbers:
-
-```bash
-dotnet prototype/UsageWidget.Prototype/bin/Debug/net10.0-windows/UsageWidget.Prototype.dll --qa qa-out
-```
+</details>
 
 ## License
 

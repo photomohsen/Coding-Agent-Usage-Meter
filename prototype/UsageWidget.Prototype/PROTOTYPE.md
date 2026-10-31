@@ -1,6 +1,6 @@
 # PROTOTYPE: widget look (throwaway)
 
-**Verdict (2026-10-27):** keep all three Floating looks with B · Pill as the default, plus Docked mode embedded in the taskbar. Both are recorded in `.scratch/usage-widget/spec.md`. There's no git repo yet, so this folder stays as the record of the prototype until it can go on a throwaway branch.
+**Verdict (2026-10-27):** keep all three Floating looks with B · Pill as the default, plus a tray icon next to the clock (2026-10-31; Docked mode was dropped). Both are recorded in `.scratch/usage-widget/spec.md`. There's no git repo yet, so this folder stays as the record of the prototype until it can go on a throwaway branch.
 
 Question: which look works best floating on the real desktop with real Usage?
 
@@ -16,16 +16,10 @@ Run from the repo root:
 dotnet run --project prototype/UsageWidget.Prototype
 ```
 
-Second question: does docked mode feel like part of the taskbar? Right-click → **Dock to taskbar**. It becomes a two-line readout the size of the clock, embedded in the taskbar as a child window just left of the tray. Right-click it to undock.
+Second question: how should it sit by the taskbar? Since 2026-10-31: a **tray icon** with two bars (Claude, Codex), or two rings if picked in Settings, that shows or hides the Floating widget, and the widget snaps 8 px above the clock when dropped near it. It hides while a full-screen app is open. See `TrayIcon.cs`.
 
-History (2026-10-27): a pill floating over the taskbar was rejected because it covered icons and was too big. Tray icons were tried next by mistake (the user wanted docked mode fixed, not replaced) and removed. Win11 cannot make the taskbar move its icons to give us room.
+History: a pill floating over the taskbar covered icons; a readout embedded in the taskbar draws nothing on Win11; a readout owned by the taskbar covered a button; two digit tray icons and then a taskbar button (Docked mode, `TaskbarDock.cs`) read as random numbers with no names or colour. Win11 lets no app draw inside the taskbar, so the tray icon is the one place left.
 
 Click: update · drag: move · hover: full state · right-click: variants, update, quit.
 
-Not in the prototype: tray icon, hotkey, startup, saved position, single-file exe.
-
-## Docked mode: what finally drew
-
-- Child of the taskbar (SetParent): invisible on Win11, even with CPU rendering. A layered child is refused under dotnet.exe (error 87).
-- **Works:** a see-through window owned by the taskbar, kept topmost at the tray's left edge. It covers a button if the taskbar is full.
-- **Final choice (user, 2026-10-27):** two pinned tray icons, Session % and Weekly %, because the taskbar is always full. See `TrayDock.cs`. The readout file `DockWindow.cs` was removed.
+Not in the prototype: hotkey, startup, saved position, single-file exe.

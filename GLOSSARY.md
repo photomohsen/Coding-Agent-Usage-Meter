@@ -34,11 +34,11 @@ _Avoid_: Refresh, renewal
 
 **Floating**:
 The widget as a small window above all others, which the user can drag anywhere.
-_Avoid_: Undocked, overlay, popup
+_Avoid_: overlay, popup
 
-**Docked**:
-The widget as a compact readout that is part of the taskbar, beside the tray.
-_Avoid_: Attached, pinned, taskbar mode
+**Tray icon**:
+The small icon next to the clock with two bars, Claude on top and Codex below, or the same two as rings (Claude outside). Click it to hide or show the Floating widget. It replaced Docked mode (a taskbar button) on 2026-10-31.
+_Avoid_: Docked, taskbar button, notification icon
 
 **Update**:
 One check with Anthropic for the latest Usage, made on a timer or on click.

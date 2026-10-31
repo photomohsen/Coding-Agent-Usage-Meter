@@ -9,7 +9,7 @@ static class Program
     [STAThread]
     static void Main(string[] args)
     {
-        // Our own taskbar identity, so the docked button doesn't group with other dotnet.exe apps.
+        // Our own identity, so our windows don't group with other dotnet.exe apps.
         SetCurrentProcessExplicitAppUserModelID("ClaudeUsageWidget.Prototype");
         var app = new Application { Resources = Theme.Load() };
         if (Array.IndexOf(args, "--qa") is var i and >= 0)
@@ -19,7 +19,7 @@ static class Program
             app.Run();
             return;
         }
-        app.Run(new PrototypeWindow(startDocked: args.Contains("--docked")));
+        app.Run(new PrototypeWindow());
     }
 
     [System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]

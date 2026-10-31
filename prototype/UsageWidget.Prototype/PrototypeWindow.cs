@@ -1,5 +1,6 @@
-// PROTOTYPE: throwaway. No tray or hotkey. Settings (look, size, position...) live in Settings.cs.
+// PROTOTYPE: throwaway. A tray icon, no hotkey. Settings (look, size, position...) live in Settings.cs.
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -19,7 +20,9 @@ class PrototypeWindow : Window
     readonly (string Key, string Name, Func<UIElement> Build)[] variants;
     readonly Settings settings = Settings.Load();
     readonly DispatcherTimer updateTimer;
-    TaskbarDock? dock;
+    TrayIcon? tray;
+    // Hidden from the tray icon, or because a full-screen app is in front.
+    bool hiddenByUser, fullScreen;
     SettingsWindow? settingsWindow;
     bool anchored = true;
     int current;
@@ -38,7 +41,7 @@ class PrototypeWindow : Window
     readonly Border frame;
     string serversKey = "";
 
-    public PrototypeWindow(bool startDocked)
+    public PrototypeWindow()
     {
         variants = [("A", "Rings", Rings), ("B", "Pill", Pill), ("C", "Strip", Strip)];
 
@@ -47,15 +50,14 @@ class PrototypeWindow : Window
         AllowsTransparency = true;
         Background = Brushes.Transparent;
         current = Math.Clamp(settings.Look, 0, variants.Length - 1);
-        if (startDocked) settings.Docked = true;
         Topmost = settings.Topmost;
         ShowInTaskbar = false;
+        ShowActivated = false; // coming back after a full-screen app must not take its focus
         ResizeMode = ResizeMode.NoResize;
         SizeToContent = SizeToContent.WidthAndHeight;
         Opacity = settings.IdleOpacity;
 
-        // Stay just above the clock until the user drags it; after that, only keep it on screen.
-        // (Keeping the right edge put by the change in width pushed it off screen after Docked mode.)
+        // Stay just above the clock until the user drags it away; after that, only keep it on screen.
         SizeChanged += (_, _) => { if (anchored) PlaceBottomRight(); else KeepOnScreen(); };
         MouseEnter += (_, _) => Opacity = 1;
         MouseLeave += (_, _) => Opacity = settings.IdleOpacity;
@@ -90,35 +92,47 @@ class PrototypeWindow : Window
         Loaded += async (_, _) =>
         {
             RestorePosition();
-            if (settings.Docked) Dock();
+            tray = new TrayIcon(ToggleShown, () => { _ = UpdateUsage(); UpdateServers(); }, OpenSettings);
+            Render();
             await UpdateUsage();
         };
 
         updateTimer = new DispatcherTimer(TimeSpan.FromMinutes(settings.UpdateMinutes), DispatcherPriority.Normal, async (_, _) => await UpdateUsage(), Dispatcher);
         new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Normal, (_, _) => Render(), Dispatcher);
         new DispatcherTimer(TimeSpan.FromSeconds(5), DispatcherPriority.Normal, (_, _) => UpdateServers(), Dispatcher);
+        new DispatcherTimer(TimeSpan.FromSeconds(2), DispatcherPriority.Normal, (_, _) => CheckFullScreen(), Dispatcher);
     }
 
-    void Dock()
+    /// From the tray icon: hide the Pill, or bring it back on top where it was.
+    void ToggleShown()
     {
-        if (dock != null) return;
-        settings.Docked = true;
-        settings.Save();
-        Hide();
-        dock = new TaskbarDock(Undock);
-        Render();
+        hiddenByUser = IsVisible && !hiddenByUser;
+        if (hiddenByUser) Hide();
+        else
+        {
+            ShowOnTop();
+            RestorePosition();
+        }
     }
 
-    void Undock()
+    void ShowOnTop()
     {
-        if (dock == null) return;
-        settings.Docked = false;
-        settings.Save();
-        dock.Dispose();
-        dock = null;
         Show();
-        RestorePosition();
+        Topmost = false; Topmost = settings.Topmost; // to the front of other topmost windows
     }
+
+    /// Out of the way while a full-screen app, game or presentation is in front; back when it closes.
+    void CheckFullScreen()
+    {
+        var full = SHQueryUserNotificationState(out var state) == 0 && state is 2 or 3 or 4; // busy, D3D, presentation
+        // Only on a change, so a tray click during full-screen keeps the widget shown until it ends.
+        if (full == fullScreen) return;
+        fullScreen = full;
+        if (hiddenByUser) return;
+        if (full) Hide(); else ShowOnTop();
+    }
+
+    [DllImport("shell32.dll")] static extern int SHQueryUserNotificationState(out int state);
 
     /// The saved spot if it is still on a screen (a monitor may be unplugged), else just above the clock.
     void RestorePosition()
@@ -146,7 +160,6 @@ class PrototypeWindow : Window
         Topmost = settings.Topmost;
         if (!IsMouseOver) Opacity = settings.IdleOpacity;
         updateTimer.Interval = TimeSpan.FromMinutes(settings.UpdateMinutes);
-        if (settings.Docked) Dock(); else Undock();
         if (ShowCodex && codexOk == null && codexError == null) _ = UpdateUsage(); // Codex just turned on
         Render();
     }
@@ -159,12 +172,22 @@ class PrototypeWindow : Window
         settingsWindow.Show();
     }
 
-    /// Just above the clock. (Top right sat on app window buttons and got lost.)
+    /// 8 px above the taskbar, right edge lined up with the clock's. (Top right sat on app window buttons and got lost.)
     void PlaceBottomRight()
     {
         var area = SystemParameters.WorkArea;
-        Left = area.Right - ActualWidth - 16;
-        Top = area.Bottom - ActualHeight - 12;
+        Left = area.Right - ActualWidth - SnapGap;
+        Top = area.Bottom - ActualHeight - SnapGap;
+    }
+
+    const double SnapGap = 8, SnapDistance = 40;
+
+    /// Dropped within 40 px of its spot above the clock, it snaps there and stays there when its size changes.
+    bool NearClock()
+    {
+        var area = SystemParameters.WorkArea;
+        return Math.Abs(area.Right - SnapGap - (Left + ActualWidth)) < SnapDistance &&
+            Math.Abs(area.Bottom - SnapGap - (Top + ActualHeight)) < SnapDistance;
     }
 
     /// Across all screens, so a widget on a second monitor stays there.
@@ -205,6 +228,7 @@ class PrototypeWindow : Window
         var (left, top) = (Left, Top);
         DragMove();
         if (Left == left && Top == top) { _ = UpdateUsage(); UpdateServers(); } // a click, not a drag
+        else if (NearClock()) ResetPosition();
         else
         {
             anchored = false;
@@ -237,8 +261,26 @@ class PrototypeWindow : Window
         if (frame.LayoutTransform is not ScaleTransform s || s.ScaleX != settings.Scale)
             frame.LayoutTransform = new ScaleTransform(settings.Scale, settings.Scale);
 
-        dock?.Render(last, error, ShowCodex ? codexLast : null);
+        RenderTray();
     }
+
+    /// Each bar is the higher of a source's two limits, the one that stops you first. Without Codex: Claude 5h, then 7d.
+    /// As rings, the first tooltip line is the outer ring: Claude (or 5h), then Codex (or 7d) inside.
+    void RenderTray()
+    {
+        if (tray == null) return;
+        string Line(Source s) => $"{s.Name}  " + (s.U is not { } u ? "no usage yet" :
+            $"5h {u.SessionPct:0}% · 7d {u.WeeklyPct:0}% · resets {Countdown(u.SessionReset)}") + (s.Err is { } e ? $" (old: {Short(e)})" : "");
+        var src = Sources().ToArray();
+        var claude = src[0];
+        var rings = settings.TrayStyle == 1;
+        if (src.Length > 1)
+            tray.Render(new(Max(claude.U), claude.Stale), new(Max(src[1].U), src[1].Stale), $"{Line(claude)}\n{Line(src[1])}", rings);
+        else
+            tray.Render(new(claude.U?.SessionPct, claude.Stale), new(claude.U?.WeeklyPct, claude.Stale), Line(claude), rings);
+    }
+
+    static double? Max(Usage? u) => u == null ? null : Math.Max(u.SessionPct, u.WeeklyPct);
 
     /// Codex only when it is on this machine and the user hasn't turned it off.
     bool ShowCodex => qaCodex ?? (settings.ShowCodex && CodexUsageClient.Installed);
@@ -388,7 +430,6 @@ class PrototypeWindow : Window
         var looks = variants.Select((v, i) => Item(v.Name, () => Switch(i), "")).ToArray();
         menu.Items.Add(new Separator());
         var compact = Item("Compact", () => { settings.Compact = !settings.Compact; settings.Save(); Render(); });
-        Item("Dock to taskbar", Dock);
         Item("Settings…", OpenSettings);
         Item("Help…", ShowHelp);
         menu.Items.Add(new Separator());

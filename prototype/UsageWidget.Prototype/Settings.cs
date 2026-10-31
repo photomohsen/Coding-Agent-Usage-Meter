@@ -10,10 +10,11 @@ class Settings
     public double Scale { get; set; } = 1.0;
     public double IdleOpacity { get; set; } = 0.85;
     public bool Topmost { get; set; } = true;
-    public bool Docked { get; set; }
     public int UpdateMinutes { get; set; } = 5;
     /// Same parts in every look, with less space around and between them.
     public bool Compact { get; set; }
+    /// 0 two bars, 1 two rings.
+    public int TrayStyle { get; set; }
     /// Codex Usage under Claude's; only has an effect when Codex is on this machine.
     public bool ShowCodex { get; set; } = true;
     /// Null until the user drags it: then it sits just above the clock.

@@ -52,6 +52,7 @@ class SettingsWindow : Window
         Content = card;
 
         Row("Look", Segments(["Rings", "Pill", "Strip"], s.Look, i => s.Look = i));
+        Row("Tray icon", Segments(["Bars", "Rings"], s.TrayStyle, i => s.TrayStyle = i));
         Row("Size", Percent(s.Scale, 50, 300, v => s.Scale = v));
         Switch("Compact", s.Compact, v => s.Compact = v);
         Row("Opacity when idle", Percent(s.IdleOpacity, 30, 100, v => s.IdleOpacity = v));
@@ -61,7 +62,6 @@ class SettingsWindow : Window
 
         Line();
         Switch("Always on top", s.Topmost, v => s.Topmost = v);
-        Switch("Docked in the taskbar", s.Docked, v => s.Docked = v);
         if (CodexUsageClient.Installed) Switch("Show Codex", s.ShowCodex, v => s.ShowCodex = v, icon: "codex");
         Switch("Start with Windows", StartWithWindows.IsOn, StartWithWindows.Set, save: false);
 
