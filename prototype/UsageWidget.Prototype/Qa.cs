@@ -61,11 +61,11 @@ static class Qa
         // Dev servers under the looks: full rows, and the short ones under a narrow look.
         var servers = new List<DevServer>
         {
-            new(18244, "node", 3000, true) { Project = "usage-site", Folder = @"C:\Users\you\Projects\usage-site", CommandLine = "node node_modules/next/dist/bin/next dev" },
+            new(18244, "node", 3000, true) { Project = "usage-site", Title = "Usage Dashboard", Folder = @"C:\Users\you\Projects\usage-site", CommandLine = "node node_modules/next/dist/bin/next dev" },
             new(20112, "node", 5173, true) { Project = "design-tool", Folder = @"C:\Users\you\Projects\design-tool" },
             new(35808, "docker", 8069, true)
             {
-                Project = "accounting", Folder = @"\\wsl.localhost\Ubuntu\home\you\accounting", CommandLine = "accounting-odoo-1 · odoo:17",
+                Project = "accounting", Title = "Odoo", Folder = @"\\wsl.localhost\Ubuntu\home\you\accounting", CommandLine = "accounting-odoo-1 · odoo:17",
                 Wsl = new WslTarget("Ubuntu", ["accounting-db-1", "accounting-odoo-1"], null),
             },
         };
@@ -82,7 +82,7 @@ static class Qa
         }
         SavePopup(widget.QaServerTip(servers[0]), Path.Combine(folder, "tip-server.png"));
         SavePopup(widget.QaServerTip(servers[2]), Path.Combine(folder, "tip-server-wsl.png"));
-        var confirm = Confirm.Make(null, "Close usage-site?",
+        var confirm = Confirm.Make(null, "Close Usage Dashboard?",
             "Stops node (PID 18244) on localhost:3000 and everything it started. Unsaved work in it is lost.", "Close");
         var card = (FrameworkElement)confirm.Content;
         confirm.Content = null;
