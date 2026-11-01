@@ -64,7 +64,9 @@ static class DevServers
     static readonly string[] Markers =
         ["package.json", "*.csproj", "*.sln", "pyproject.toml", "requirements.txt", "wrangler.*", "deno.json", ".git"];
 
-    /// The project is the nearest folder with a marker, above the working folder or a path in the command line.
+    /// The folder is the nearest one with a marker, above the working folder or a path in the command line.
+    /// The project is named after the git repo that holds that folder, so a server started in a subfolder
+    /// (REA-Accounting\app) shows as REA-Accounting, not app. Without a repo, the folder names it.
     static DevServer WithProject(DevServer server)
     {
         var (cwd, cmd) = ProcessInfo.Read(server.Pid);
@@ -73,12 +75,31 @@ static class DevServers
         if (cmd != null)
             starts.AddRange(cmd.Split('"', ' ').Where(a => a.Length > 3 && Path.IsPathFullyQualified(a)));
         foreach (var start in starts)
-            if (ProjectRoot(start) is { } root)
-                return server with { Project = Path.GetFileName(root), Folder = root, CommandLine = cmd };
+            if (Nearest(start, Markers) is { } root)
+                return server with { Project = Path.GetFileName(MainRepo(Nearest(root, [".git"])) ?? root), Folder = root, CommandLine = cmd };
         return server with { Folder = cwd, CommandLine = cmd };
     }
 
-    static string? ProjectRoot(string path)
+    /// A git worktree's .git is a file that points into its main repo (<repo>\.git\worktrees\<name>),
+    /// so a worktree with a made-up name (competent-payne-f88c3a) is named after the main repo.
+    static string? MainRepo(string? repo)
+    {
+        if (repo == null) return null;
+        try
+        {
+            var git = Path.Combine(repo, ".git");
+            if (!File.Exists(git)) return repo;
+            var link = File.ReadLines(git).FirstOrDefault(l => l.StartsWith("gitdir:"))?[7..].Trim();
+            if (link == null) return repo;
+            var dir = Path.GetFullPath(link.Replace('/', '\\'), repo);
+            var at = dir.LastIndexOf(@"\.git\worktrees\", StringComparison.OrdinalIgnoreCase);
+            return at > 0 ? dir[..at] : repo;
+        }
+        catch { return repo; } // no access, bad path
+    }
+
+    /// The nearest folder at or above the path that holds one of the markers.
+    static string? Nearest(string path, string[] markers)
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile).TrimEnd('\\');
         try
@@ -92,7 +113,7 @@ static class DevServers
                     dir.FullName.Contains(@"\AppData\", StringComparison.OrdinalIgnoreCase)) return null;
                 if (dir.Name.Equals("node_modules", StringComparison.OrdinalIgnoreCase)) continue;
                 if (dir.Parent?.Name.Equals("node_modules", StringComparison.OrdinalIgnoreCase) == true) continue;
-                if (Markers.Any(m => dir.EnumerateFileSystemInfos(m).Any())) return dir.FullName;
+                if (markers.Any(m => dir.EnumerateFileSystemInfos(m).Any())) return dir.FullName;
             }
         }
         catch { } // no access, bad path
@@ -214,7 +235,8 @@ static class Wsl
             : relay with { Name = f.Name, Project = f.Project, Folder = f.Folder, CommandLine = f.CommandLine, Wsl = f.Target };
     }
 
-    /// The sh script run in the default WSL distro: its name, the running containers, and the Linux listeners.
+    /// The sh script run in the default WSL distro: its name, the running containers, and the Linux listeners
+    /// with their working folder and the git repo that holds it.
     const string Script = """
         echo "d|$WSL_DISTRO_NAME"
         if command -v docker >/dev/null 2>&1; then
@@ -222,7 +244,9 @@ static class Wsl
         fi
         ss -ltnpH 2>/dev/null | sed 's/^/s|/'
         for p in $(ss -ltnpH 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u); do
-          echo "p|$p|$(readlink /proc/$p/cwd)|$(tr '\0' ' ' < /proc/$p/cmdline)"
+          c=$(readlink /proc/$p/cwd); r=""
+          [ -n "$c" ] && r=$(git -C "$c" rev-parse --show-toplevel 2>/dev/null)
+          echo "p|$p|$c|$r|$(tr '\0' ' ' < /proc/$p/cmdline)"
         done
         """;
 
@@ -251,18 +275,20 @@ static class Wsl
         }
 
         // Then Linux programs listening in WSL (a node or python dev server started there).
-        var procs = lines.Where(l => l.StartsWith("p|")).Select(l => l[2..].Split('|', 3)).Where(p => p.Length == 3)
-            .ToDictionary(p => int.Parse(p[0]), p => (Cwd: p[1], Cmd: p[2].Trim()));
+        var procs = lines.Where(l => l.StartsWith("p|")).Select(l => l[2..].Split('|', 4)).Where(p => p.Length == 4)
+            .ToDictionary(p => int.Parse(p[0]), p => (Cwd: p[1], Repo: p[2], Cmd: p[3].Trim()));
         foreach (var l in lines.Where(l => l.StartsWith("s|")))
         {
             var fields = l[2..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (fields.Length < 4 || !int.TryParse(fields[3][(fields[3].LastIndexOf(':') + 1)..], out var port)) continue;
             if (result.ContainsKey(port) || Regex.Match(l, @"\(""([^""]+)"",pid=(\d+)") is not { Success: true } u) continue;
             var pid = int.Parse(u.Groups[2].Value);
-            var (cwd, cmd) = procs.TryGetValue(pid, out var p) ? p : ("", "");
-            // The home folder is never one project, so the program's name stands in for it.
-            var home = cwd.StartsWith("/home/") && cwd.Count(ch => ch == '/') == 2;
-            result[port] = new Found(cwd is "" or "/" || home ? u.Groups[1].Value : cwd[(cwd.LastIndexOf('/') + 1)..],
+            var (cwd, repo, cmd) = procs.TryGetValue(pid, out var p) ? p : ("", "", "");
+            // The git repo names the project, as on Windows. The home folder is never one project, so the program's
+            // name stands in for it.
+            static bool Home(string dir) => dir.StartsWith("/home/") && dir.Count(ch => ch == '/') == 2;
+            var named = repo is "" or "/" || Home(repo) ? cwd : repo;
+            result[port] = new Found(named is "" or "/" || Home(named) ? u.Groups[1].Value : named[(named.LastIndexOf('/') + 1)..],
                 Windows(cwd), u.Groups[1].Value, cmd == "" ? null : cmd, new WslTarget(distro, [], pid));
         }
         return result;

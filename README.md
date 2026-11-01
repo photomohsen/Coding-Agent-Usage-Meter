@@ -176,9 +176,9 @@ Under the look, the widget lists the local dev servers you have running, with th
 
 It finds:
 
-- **Programs on Windows**: node, deno, bun, python, dotnet, java, ruby, php, go, vite, hugo and a few more. The project is the nearest folder with a `package.json`, `.csproj`, `pyproject.toml`, `.git` and so on. Close stops the program and everything it started.
+- **Programs on Windows**: node, deno, bun, python, dotnet, java, ruby, php, go, vite, hugo and a few more. The row is named after the git repo the server runs in, so a server started in `my-repo\app` shows as `my-repo`. A git worktree shows as its main repo. Without a repo, the name is the nearest folder with a `package.json`, `.csproj`, `pyproject.toml` and so on. Close stops the program and everything it started.
 - **Docker containers in WSL**: shown under their Compose project (`accounting`, `erpnext`…), with the folder in WSL. Close runs `docker stop` on that project's containers. They keep their data and start again with `docker compose up`.
-- **Programs running in WSL** (a node or python server started there). Close stops that program.
+- **Programs running in WSL** (a node or python server started there), named after their git repo too. Close stops that program.
 
 System services that also listen on a port never show, so you can't stop one by mistake.
 
