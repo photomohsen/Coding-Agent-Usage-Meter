@@ -361,7 +361,7 @@ class PrototypeWindow : Window
                 $"Last update: {(codexOk is { } c ? c.ToString("HH:mm:ss") : "never")}" +
                 (codexError != null ? $"\n⚠ {codexError}{(codexLast != null ? " (showing the Codex logs)" : "")}" : "")) +
             "\n\nClick: update · drag: move · Ctrl+wheel: size · ←/→: variant · right-click: menu" +
-            "\nDev servers: click localhost to open it · hover a row for its folder · Close stops it",
+            "\nDev servers: click the :port to open it · hover a row for its folder · Close stops it",
             "Coding Agent Usage Meter", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
@@ -377,7 +377,7 @@ class PrototypeWindow : Window
     void BuildServers()
     {
         var halo = narrow;
-        var key = $"{halo}|" + string.Join(",", servers.Select(s => $"{s.Pid}:{s.Port}:{s.Project}"));
+        var key = $"{halo}|" + string.Join(",", servers.Select(s => $"{s.Pid}:{s.Port}:{s.Shown}"));
         if (key == serversKey) return;
         serversKey = key;
 
@@ -386,7 +386,7 @@ class PrototypeWindow : Window
         serversPanel.Children.Add(new Border { Height = 1, Background = Theme.Divider, Margin = new Thickness(0, 5, 0, 3) });
         foreach (var server in servers)
         {
-            // A narrow look has no room for the full row: just :port and ×, the project is in the hover card.
+            // A narrow look has no room for the full row: just :port and ×, the page's title is in the hover card.
             var row = new DockPanel { Height = halo ? 16 : 17, Background = Brushes.Transparent };
             var close = halo
                 ? new Button { Style = (Style)FindResource("ServerX"), Margin = new Thickness(6, 0, 0, 0) }
@@ -397,10 +397,12 @@ class PrototypeWindow : Window
             row.Children.Add(close);
             var start = new StackPanel { Orientation = Orientation.Horizontal };
             start.Children.Add(new Ellipse { Width = 6, Height = 6, Fill = Theme.Running, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
-            start.Children.Add(Link(server, halo ? $":{server.Port}" : server.Url));
+            var link = Link(server, $":{server.Port}");
+            if (!halo) link.MinWidth = 40; // room for :65535, so the titles line up
+            start.Children.Add(link);
             if (!halo)
             {
-                var project = Label(server.Project, 11, Text, HorizontalAlignment.Left, left: 8);
+                var project = Label(server.Shown, 11, Text, HorizontalAlignment.Left, left: 4);
                 project.TextTrimming = TextTrimming.CharacterEllipsis;
                 project.MaxWidth = 160;
                 start.Children.Add(project);
@@ -412,15 +414,16 @@ class PrototypeWindow : Window
         }
     }
 
-    /// The hover card on a server row: the project, its folder, and what runs it.
+    /// The hover card on a server row: the page's title, the project and its folder, and what runs it.
     ToolTip ServerCard(DevServer server)
     {
         var card = new StackPanel();
         var head = new StackPanel { Orientation = Orientation.Horizontal };
         head.Children.Add(new Ellipse { Width = 6, Height = 6, Fill = Theme.Running, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
-        head.Children.Add(Label(server.Project, 12, Text, HorizontalAlignment.Left, bold: true));
+        head.Children.Add(Label(server.Shown, 12, Text, HorizontalAlignment.Left, bold: true));
         card.Children.Add(head);
-        card.Children.Add(Wrapped(server.Folder ?? "folder unknown", 12, Theme.Secondary, top: 2));
+        var folder = server.Folder ?? "folder unknown";
+        card.Children.Add(Wrapped(server.Title == null ? folder : $"{server.Project} · {folder}", 12, Theme.Secondary, top: 2));
         var runs = server.Wsl is { } w
             ? w.Containers.Length > 0 ? $"Docker in WSL ({w.Distro}) · {string.Join(", ", w.Containers)}" : $"{server.Name} in WSL ({w.Distro}) · PID {w.LinuxPid}"
             : $"{server.Name} · PID {server.Pid}";
@@ -437,8 +440,8 @@ class PrototypeWindow : Window
         return label;
     }
 
-    /// `localhost:port` (or `:port`), opening it in the browser. A Button, so the click doesn't start a window drag.
-    UIElement Link(DevServer server, string text)
+    /// `:port`, opening localhost:port in the browser. A Button, so the click doesn't start a window drag.
+    FrameworkElement Link(DevServer server, string text)
     {
         var link = new Button
         {
@@ -467,7 +470,7 @@ class PrototypeWindow : Window
         var body = server.Wsl is { Containers.Length: > 0 }
             ? $"{StopsWhat(server)}, which serve {server.Url}. They keep their data and start again with docker compose up."
             : $"{StopsWhat(server)} on {server.Url}. Unsaved work in it is lost.";
-        if (!Confirm.Ask(this, $"Close {server.Project}?", body, "Close"))
+        if (!Confirm.Ask(this, $"Close {server.Shown}?", body, "Close"))
             return;
         // Stopping containers takes a few seconds, so it runs off the UI thread.
         if (await Task.Run(() => DevServers.Close(server)) is { } err)

@@ -2,6 +2,7 @@
 // and ports that WSL forwards to this PC (Docker containers or Linux programs running there).
 using System.Diagnostics;
 using System.IO;
+using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 
@@ -12,6 +13,10 @@ record DevServer(int Pid, string Name, int Port, bool LoopbackOnly)
     public string Url => $"localhost:{Port}";
     /// The project folder's name, or the program's name when no project folder is found.
     public string Project { get; init; } = Name;
+    /// The <title> of the page the server serves at /, once it has been read.
+    public string? Title { get; init; }
+    /// What the row shows: the page's title, or the project when the page has none.
+    public string Shown => Title ?? Project;
     public string? Folder { get; init; }
     public string? CommandLine { get; init; }
     /// Set when WSL forwards the port: what runs it there. Pid is then wslrelay's, which serves every WSL port.
@@ -51,10 +56,12 @@ static class DevServers
         // WSL ports are looked up in WSL in the background, so until that is done they show as just "WSL".
         var relayed = found.Values.Where(s => s.Name.Equals(Wsl.Relay, StringComparison.OrdinalIgnoreCase)).ToList();
         Wsl.Refresh(relayed.Select(s => s.Port));
+        PageTitles.Keep(found.Keys);
         return found.Values
             .Select(s => relayed.Contains(s) ? Wsl.Describe(s)
                 : projects.TryGetValue((s.Pid, s.Port), out var p) ? p with { LoopbackOnly = s.LoopbackOnly }
                 : projects[(s.Pid, s.Port)] = WithProject(s))
+            .Select(s => s with { Title = PageTitles.Get(s.Pid, s.Port) })
             .OrderBy(s => s.Port).ToList();
     }
 
@@ -184,6 +191,72 @@ static class DevServers
         }
         finally { Marshal.FreeHGlobal(buf); }
         return rows;
+    }
+}
+
+/// The <title> of the page each server serves at http://localhost:port/, read in the background once per server.
+/// A server that doesn't answer yet (still starting) is asked again a little later. Until then, and for servers
+/// that serve no HTML page (an API, a debugger port), the row shows the project.
+static class PageTitles
+{
+    static readonly HttpClient http = new(new SocketsHttpHandler
+    {
+        MaxAutomaticRedirections = 3,
+        // Only ever localhost, where dev servers use their own self-signed certificates.
+        SslOptions = { RemoteCertificateValidationCallback = (_, _, _, _) => true },
+    }) { Timeout = TimeSpan.FromSeconds(3) };
+
+    static readonly Dictionary<(int Pid, int Port), string?> known = [];
+    static readonly Dictionary<(int Pid, int Port), DateTime> asked = [];
+    static readonly object gate = new();
+    const int MaxBytes = 256 * 1024;
+
+    /// The title once read, or null; starts a read when none is known and none was tried in the last 10 seconds.
+    public static string? Get(int pid, int port)
+    {
+        lock (gate)
+        {
+            if (known.TryGetValue((pid, port), out var title)) return title;
+            if (asked.TryGetValue((pid, port), out var at) && DateTime.Now - at < TimeSpan.FromSeconds(10)) return null;
+            asked[(pid, port)] = DateTime.Now;
+        }
+        _ = Task.Run(async () =>
+        {
+            var title = await Read(port);
+            if (title is { } t) lock (gate) known[(pid, port)] = t.Length > 0 ? t : null;
+        });
+        return null;
+    }
+
+    /// Forgets servers that stopped, so a new server on the same port is read again.
+    public static void Keep(IEnumerable<(int Pid, int Port)> running)
+    {
+        var keep = running.ToHashSet();
+        lock (gate)
+        {
+            foreach (var gone in known.Keys.Where(k => !keep.Contains(k)).ToList()) known.Remove(gone);
+            foreach (var gone in asked.Keys.Where(k => !keep.Contains(k)).ToList()) asked.Remove(gone);
+        }
+    }
+
+    /// The page's title, "" when it answered without one, or null when it didn't answer.
+    static async Task<string?> Read(int port)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"http://localhost:{port}/");
+            request.Headers.Accept.ParseAdd("text/html"); // Vite and others only serve index.html to a browser
+            using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+            if (!response.IsSuccessStatusCode || response.Content.Headers.ContentType?.MediaType != "text/html") return "";
+            await using var stream = await response.Content.ReadAsStreamAsync();
+            var buffer = new byte[MaxBytes];
+            int read = 0, n;
+            while (read < MaxBytes && (n = await stream.ReadAsync(buffer.AsMemory(read))) > 0) read += n;
+            var html = System.Text.Encoding.UTF8.GetString(buffer, 0, read);
+            var m = Regex.Match(html, @"<title[^>]*>(.*?)</title>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            return m.Success ? Regex.Replace(System.Net.WebUtility.HtmlDecode(m.Groups[1].Value), @"\s+", " ").Trim() : "";
+        }
+        catch { return null; } // not up yet, no HTTP on this port, or too slow
     }
 }
 

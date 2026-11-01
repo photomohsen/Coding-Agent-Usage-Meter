@@ -162,7 +162,7 @@ In **Settings → Tray icon** you can pick **Rings** instead: Claude is the oute
 
 ## Dev servers
 
-Under the look, the widget lists the local dev servers you have running, with their project name.
+Under the look, the widget lists the local dev servers you have running. Each row shows the port and the title of the page it serves. A server with no page (an API, a debugger port) shows its project name instead.
 
 <p>
   <img src="docs/images/servers.png" width="315" alt="Three dev servers under the Bars look">
@@ -170,13 +170,13 @@ Under the look, the widget lists the local dev servers you have running, with th
   <img src="docs/images/tip-server-wsl.png" width="420" alt="The hover card of a Docker project in WSL">
 </p>
 
-- **Click `localhost:3000`** to open it in your browser.
-- **Hover a row** to see the project folder and what runs it.
+- **Click `:3000`** to open `localhost:3000` in your browser.
+- **Hover a row** to see the project, its folder and what runs it.
 - **Close** stops it. It always asks first.
 
 It finds:
 
-- **Programs on Windows**: node, deno, bun, python, dotnet, java, ruby, php, go, vite, hugo and a few more. The row is named after the git repo the server runs in, so a server started in `my-repo\app` shows as `my-repo`. A git worktree shows as its main repo. Without a repo, the name is the nearest folder with a `package.json`, `.csproj`, `pyproject.toml` and so on. Close stops the program and everything it started.
+- **Programs on Windows**: node, deno, bun, python, dotnet, java, ruby, php, go, vite, hugo and a few more. The project is named after the git repo the server runs in, so a server started in `my-repo\app` shows as `my-repo`. A git worktree shows as its main repo. Without a repo, the name is the nearest folder with a `package.json`, `.csproj`, `pyproject.toml` and so on. Close stops the program and everything it started.
 - **Docker containers in WSL**: shown under their Compose project (`accounting`, `erpnext`…), with the folder in WSL. Close runs `docker stop` on that project's containers. They keep their data and start again with `docker compose up`.
 - **Programs running in WSL** (a node or python server started there), named after their git repo too. Close stops that program.
 
