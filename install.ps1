@@ -11,7 +11,11 @@ $temp = Join-Path $env:TEMP "coding-agent-usage-meter-$(Get-Random)"
 New-Item -ItemType Directory -Path $temp | Out-Null
 
 try {
+    $version = $null
     if (-not $Zip) {
+        # The commit this copy comes from, so the widget can tell when GitHub has a newer one. Read before the download:
+        # a push in between only makes the next check offer one extra update.
+        try { $version = (Invoke-RestMethod 'https://api.github.com/repos/photomohsen/Coding-Agent-Usage-Meter/commits/main' -Headers @{ Accept = 'application/vnd.github.sha' }).ToString().Trim() } catch { }
         Write-Host 'Downloading the Coding Agent Usage Meter...'
         $Zip = Join-Path $temp 'source.zip'
         Invoke-WebRequest 'https://github.com/photomohsen/Coding-Agent-Usage-Meter/archive/refs/heads/main.zip' -OutFile $Zip -UseBasicParsing
@@ -27,6 +31,7 @@ try {
 
     New-Item -ItemType Directory -Path $folder -Force | Out-Null
     Copy-Item (Join-Path $source.FullName '*') $folder -Recurse -Force
+    if ($version) { Set-Content (Join-Path $folder 'version.txt') $version -NoNewline }
     & cmd.exe /c "`"$folder\Install.cmd`""
 }
 finally {

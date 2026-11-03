@@ -103,8 +103,10 @@ class PrototypeWindow : Window
             RestorePosition();
             tray = new TrayIcon(ToggleShown, () => { _ = UpdateUsage(); UpdateServers(); }, OpenSettings);
             Render();
+            _ = CheckForUpdate(false);
             await UpdateUsage();
         };
+        new DispatcherTimer(TimeSpan.FromHours(24), DispatcherPriority.Normal, (_, _) => _ = CheckForUpdate(false), Dispatcher);
 
         updateTimer = new DispatcherTimer(TimeSpan.FromMinutes(settings.UpdateMinutes), DispatcherPriority.Normal, async (_, _) => await UpdateUsage(), Dispatcher);
         new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Normal, (_, _) => { if (!tipOpen) Render(); }, Dispatcher);
@@ -479,6 +481,25 @@ class PrototypeWindow : Window
         UpdateServers();
     }
 
+    bool updateReady;
+
+    /// Asks GitHub for the newest version. `ask` is a click on the menu item (answer every time, offer the install);
+    /// without it this is the quiet check that only makes the menu item say "Update available…".
+    async Task CheckForUpdate(bool ask)
+    {
+        void Say(string text) { if (ask) MessageBox.Show(this, text, "Check for updates", MessageBoxButton.OK, MessageBoxImage.Information); }
+        if (Updater.IsClone) { Say("This copy is a git clone. Run git pull, then Install.cmd."); return; }
+        if (await Updater.LatestAsync() is not { } latest) { Say("Could not reach GitHub."); return; }
+        updateReady = Updater.IsNewer(latest);
+        if (!updateReady) { Say("You have the latest version."); return; }
+        if (!ask) return;
+        if (Confirm.Ask(this, "Update the widget?", "A new version is on GitHub. The widget closes, installs it and starts again.", "Update", "Later"))
+        {
+            Updater.Install();
+            Application.Current.Shutdown();
+        }
+    }
+
     ContextMenu BuildMenu()
     {
         var menu = new ContextMenu();
@@ -496,11 +517,13 @@ class PrototypeWindow : Window
         var compact = Item("Compact", () => { settings.Compact = !settings.Compact; settings.Save(); Render(); });
         Item("Settings…", OpenSettings);
         Item("Help…", ShowHelp);
+        var updates = Item("Check for updates", () => _ = CheckForUpdate(true));
         menu.Items.Add(new Separator());
         Item("Quit", () => Application.Current.Shutdown());
         // Tick the current look each time the menu opens.
         void Tick()
         {
+            updates.Header = updateReady ? "Update available…" : "Check for updates";
             for (var i = 0; i < looks.Length; i++) looks[i].IsChecked = i == current;
             compact.IsChecked = settings.Compact;
         }

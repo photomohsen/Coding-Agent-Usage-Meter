@@ -168,8 +168,16 @@ static class StartWithWindows
     {
         foreach (var old in OldLaunchers) File.Delete(old);
         if (!on) { File.Delete(Launcher); return; }
-        // Through the signed dotnet.exe (company app control blocks our own .exe); 0 hides the console window.
+        // Through Start Widget.vbs, which finds dotnet even when it is not on PATH at login; 0 hides the console window.
+        if (Updater.Root is { } root)
+        {
+            var vbs = Path.Combine(root, "Start Widget.vbs");
+            File.WriteAllText(Launcher, $"CreateObject(\"WScript.Shell\").Run \"wscript.exe //nologo \"\"{vbs}\"\"\", 0\r\n");
+            return;
+        }
+        // No launcher script beside us: run this dll through the signed dotnet.exe that runs us now (company app control blocks our own .exe).
         var dll = typeof(StartWithWindows).Assembly.Location;
-        File.WriteAllText(Launcher, $"CreateObject(\"WScript.Shell\").Run \"dotnet \"\"{dll}\"\"\", 0\r\n");
+        var dotnet = Environment.ProcessPath ?? "dotnet";
+        File.WriteAllText(Launcher, $"CreateObject(\"WScript.Shell\").Run \"\"\"{dotnet}\"\" \"\"{dll}\"\"\", 0\r\n");
     }
 }

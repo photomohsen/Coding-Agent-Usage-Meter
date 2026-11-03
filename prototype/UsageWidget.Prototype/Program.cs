@@ -24,6 +24,8 @@ static class Program
         // One widget at a time: a second start (desktop shortcut, Start with Windows) just exits.
         using var single = new Mutex(true, @"Local\CodingAgentUsageMeter", out var first);
         if (!first) return 0;
+        // Rewrite the Startup launcher each start, so one from an older version (bare "dotnet") is fixed.
+        try { if (StartWithWindows.IsOn) StartWithWindows.Set(true); } catch { }
         return app.Run(new PrototypeWindow());
     }
 

@@ -9,9 +9,9 @@ namespace UsageWidget.Prototype;
 static class Confirm
 {
     /// Opens just above `owner`, right edges lined up. "Keep it" is the default, for Enter and Esc alike.
-    public static bool Ask(Window owner, string title, string text, string yes)
+    public static bool Ask(Window owner, string title, string text, string yes, string no = "Keep it")
     {
-        var window = Make(owner, title, text, yes);
+        var window = Make(owner, title, text, yes, no);
         window.Loaded += (_, _) =>
         {
             // The margin around the card is shadow, so the card itself lines up with the widget.
@@ -23,9 +23,9 @@ static class Confirm
     }
 
     /// The window, not shown yet; QA draws its card.
-    internal static Window Make(Window? owner, string title, string text, string yes)
+    internal static Window Make(Window? owner, string title, string text, string yes, string no = "Keep it")
     {
-        var keep = new Button { Content = "Keep it", IsDefault = true, IsCancel = true };
+        var keep = new Button { Content = no, IsDefault = true, IsCancel = true };
         var go = new Button { Content = yes, Background = Theme.Red, Foreground = Brushes.White, Margin = new Thickness(8, 0, 0, 0) };
         // Close's own red Background wins over the style's grey.
         foreach (var b in new[] { keep, go }) b.Style = (Style)Application.Current.FindResource("DialogButton");

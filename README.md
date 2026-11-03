@@ -46,7 +46,7 @@ Open **PowerShell** (Start → type `PowerShell`), paste this line and press Ent
 irm https://raw.githubusercontent.com/photomohsen/Coding-Agent-Usage-Meter/main/install.ps1 | iex
 ```
 
-It downloads the widget to `%LOCALAPPDATA%\Coding Agent Usage Meter`, installs .NET 10 if you don't have it, puts a **Coding Agent Usage Meter** shortcut on your desktop and starts the widget. Paste the same line again later to update it.
+It downloads the widget to `%LOCALAPPDATA%\Coding Agent Usage Meter`, installs .NET 10 if you don't have it, puts a **Coding Agent Usage Meter** shortcut on your desktop and starts the widget. To update, right-click the widget and choose **Check for updates**, or paste the same line again. The menu says **Update available…** when GitHub has a newer version.
 
 ### Or download the ZIP
 
