@@ -22,17 +22,24 @@ ElseIf fso.FileExists(userDotnet) Then
     dotnet = userDotnet
 End If
 
+' Smart App Control often blocks the widget for the first minutes after login, then lets it run.
+' So when it blocks the widget, wait and try again. Ask the user only when every try fails.
 Set started = CreateObject("WbemScripting.SWbemDateTime")
-started.SetVarDate Now, True
-startedAt = Timer
-code = shell.Run("""" & dotnet & """ """ & dll & """", 0, True)
-' 0: quit, or a second widget that found one already running. Anything else: it crashed.
-If code = 0 Then WScript.Quit 0
+For attempt = 1 To 8
+    started.SetVarDate Now, True
+    startedAt = Timer
+    code = shell.Run("""" & dotnet & """ """ & dll & """", 0, True)
+    ' 0: quit, or a second widget that found one already running. Anything else: it crashed.
+    If code = 0 Then WScript.Quit 0
+    isBlocked = Blocked()
+    If Not isBlocked Or attempt = 8 Then Exit For
+    WScript.Sleep 30000
+Next
 
-If Blocked() Then
+If isBlocked Then
     MsgBox "Windows blocked the widget, so it did not start." & vbCrLf & vbCrLf & _
         "Smart App Control stops apps that are not signed. This widget is built on your PC, so it has no signature." & vbCrLf & vbCrLf & _
-        "Start the widget again: Windows lets it run some of the time." & vbCrLf & _
+        "It tried for 4 minutes. Start the widget again later: Windows lets it run some of the time." & vbCrLf & _
         "To stop the blocks, turn off Smart App Control in Windows Security > App & browser control > Smart App Control settings.", _
         vbExclamation, title
 ElseIf Abs(Timer - startedAt) < 30 Then

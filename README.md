@@ -80,7 +80,7 @@ To quit, right-click the widget → **Quit**.
 
 ### If it doesn't start
 
-If **Smart App Control** is on, Windows sometimes blocks the widget, because a widget built on your PC is not signed. You then see the message *"Windows blocked the widget"*. Start the widget again: Windows lets it run some of the time. To stop the blocks, turn off Smart App Control in **Windows Security → App & browser control → Smart App Control settings**.
+If **Smart App Control** is on, Windows sometimes blocks the widget, because a widget built on your PC is not signed. This happens most often just after you sign in. The launcher then tries again every 30 seconds for 4 minutes. If every try fails, you see the message *"Windows blocked the widget"*. Start the widget again: Windows lets it run some of the time. To stop the blocks, turn off Smart App Control in **Windows Security → App & browser control → Smart App Control settings**.
 
 ## Use it
 
@@ -220,7 +220,7 @@ dotnet build prototype/UsageWidget.Prototype
 | `TrayIcon.cs` | The tray icon |
 | `Qa.cs`, `E2e.cs` | The screenshot check and the end-to-end test |
 
-It runs through `dotnet.exe` instead of its own `.exe`, so it also works where company app control blocks unsigned programs. Smart App Control checks the `.dll` too, so it can still block the widget. `Start Widget.vbs` waits while the widget runs and shows a message when that happens.
+It runs through `dotnet.exe` instead of its own `.exe`, so it also works where company app control blocks unsigned programs. Smart App Control checks the `.dll` too, so it can still block the widget. `Start Widget.vbs` waits while the widget runs. When Smart App Control blocks it, the script tries again every 30 seconds, up to 8 times, and shows a message only when every try fails.
 
 ### Checks
 
